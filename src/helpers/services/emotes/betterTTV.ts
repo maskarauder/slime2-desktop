@@ -20,22 +20,32 @@ type BttvEmote = {
 
 const bttvApi = {
 	async getUser(platform: 'twitch' | 'youtube', userId: string) {
-		const user = await bttvAxios
-			.get<{
-				id: string;
-				bots: string[];
-				avatar: string;
-				channelEmotes: BttvEmote[];
-				sharedEmotes: BttvEmote[];
-			}>(`/users/${platform}/${userId}`)
-			.then(response => response.data)
-			.catch(() => null);
+		const [globalEmotes, user] = await Promise.all([
+			bttvAxios
+				.get<BttvEmote[]>('/emotes/global')
+				.then(response => response.data)
+				.catch(() => null),
+			bttvAxios
+				.get<{
+					id: string;
+					bots: string[];
+					avatar: string;
+					channelEmotes: BttvEmote[];
+					sharedEmotes: BttvEmote[];
+				}>(`/users/${platform}/${userId}`)
+				.then(response => response.data)
+				.catch(() => null),
+		]);
 
-		if (!user) return null;
+		if (!globalEmotes && !user) return null;
 
 		return {
-			bots: user.bots,
-			emotes: [...user.channelEmotes, ...user.sharedEmotes].map(emote => {
+			bots: user?.bots ?? [],
+			emotes: [
+				...(globalEmotes ?? []),
+				...(user?.channelEmotes ?? []),
+				...(user?.sharedEmotes ?? []),
+			].map(emote => {
 				return {
 					id: emote.id,
 					code: emote.code,

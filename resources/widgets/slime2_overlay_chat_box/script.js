@@ -249,14 +249,21 @@ async function widgetAccountsListener(event) {
 
 	Widget.readAccount = newReadAccount;
 
-	const [cheermotes, globalBadges, channelBadges, bttvUser, ffzRoom] =
-		await Promise.all([
-			getTwitchCheermotes(),
-			getTwitchGlobalBadges(),
-			getTwitchChannelChatBadges(),
-			getBttvUser(),
-			getFfzRoom(),
-		]);
+	const [
+		cheermotes,
+		globalBadges,
+		channelBadges,
+		bttvUser,
+		ffzRoom,
+		sevenTvUser,
+	] = await Promise.all([
+		getTwitchCheermotes(),
+		getTwitchGlobalBadges(),
+		getTwitchChannelChatBadges(),
+		getBttvUser(),
+		getFfzRoom(),
+		getSevenTvUser(),
+	]);
 
 	// collect bttv emotes into Twitch.thirdPartyEmotes
 	bttvUser?.emotes?.forEach(emote => {
@@ -266,6 +273,11 @@ async function widgetAccountsListener(event) {
 	// collect ffz emotes into Twitch.thirdPartyEmotes
 	ffzRoom?.emotes?.forEach(emote => {
 		Twitch.thirdPartyEmotes.set(emote.name, { type: 'ffz', data: emote });
+	});
+
+	// collect 7TV emotes into Twitch.thirdPartyEmotes
+	sevenTvUser?.emotes?.forEach(emote => {
+		Twitch.thirdPartyEmotes.set(emote.name, { type: 'seventv', data: emote });
 	});
 
 	// collect global badges into Twitch.badges
@@ -856,6 +868,16 @@ function buildTextFragments(textFragment) {
 				srcAnimated,
 				srcStatic,
 			});
+		} else if (thirdPartyEmote.type === 'seventv') {
+			const { id } = thirdPartyEmote.data;
+			const srcAnimated = buildSevenTvEmoteImageUrl(id);
+			const srcStatic = buildSevenTvEmoteImageUrl(id, { useStatic: true });
+			parsedFragments.push({
+				type: 'emote',
+				text: part,
+				srcAnimated,
+				srcStatic,
+			});
 		} else {
 			parsedFragments.push({ type: 'text', text: part });
 		}
@@ -909,6 +931,10 @@ function buildEmoteFragment(emoteFragment) {
 		const { urls, animated: animatedUrls } = thirdPartyEmote.data;
 		srcAnimated = buildFfzEmoteImageUrl(urls, animatedUrls);
 		srcStatic = buildFfzEmoteImageUrl(urls, animatedUrls, { useStatic: true });
+	} else if (thirdPartyEmote.type === 'seventv') {
+		const { id } = thirdPartyEmote.data;
+		srcAnimated = buildSevenTvEmoteImageUrl(id);
+		srcStatic = buildSevenTvEmoteImageUrl(id, { useStatic: true });
 	}
 
 	return buildParsedEmoteFragment({
@@ -1075,6 +1101,19 @@ async function getFfzRoom() {
 	});
 }
 
+/**
+ * Returns 7TV global and Twitch user emotes, or `null` if both API requests
+ * fail.
+ *
+ * @returns {Promise<Object | null>}
+ */
+async function getSevenTvUser() {
+	return slime2.request('get-seventv-user', {
+		account_id: Widget.readAccount.id,
+		platform: 'twitch',
+	});
+}
+
 // Helpers
 // ***************************************************************************
 
@@ -1177,6 +1216,23 @@ function buildFfzEmoteImageUrl(
 	}
 
 	return url;
+}
+
+const BASE_SEVENTV_EMOTE_URL = 'https://cdn.7tv.app/emote';
+/**
+ * Builds a 7TV emote image URL given the emote ID.
+ *
+ * @param {string} id - Emote ID
+ * @param {Object} [options] - Format options
+ * @param {boolean} [options.useStatic]
+ * @param {'1x' | '2x' | '3x' | '4x'} [options.size]
+ */
+function buildSevenTvEmoteImageUrl(
+	id,
+	{ useStatic = false, size = '4x' } = {},
+) {
+	const filename = `${size}${useStatic ? '_static' : ''}.webp`;
+	return [BASE_SEVENTV_EMOTE_URL, id, filename].join('/');
 }
 
 /**

@@ -8,6 +8,7 @@ export default {
 	semi: true,
 	singleQuote: true,
 	jsxSingleQuote: true,
+	tabWidth: 4,
 	trailingComma: 'all',
 	tailwindFunctions: ['clsx'],
 	tailwindStylesheet: './src/styles.css',

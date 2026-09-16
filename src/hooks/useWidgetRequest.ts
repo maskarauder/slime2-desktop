@@ -2,6 +2,7 @@ import useAccounts from '@/contexts/accounts/useAccounts';
 import { useBotsLogDispatch } from '@/contexts/bot_logs/useBotLogsDispatch';
 import bttvApi from '@/helpers/services/emotes/betterTTV';
 import ffzApi from '@/helpers/services/emotes/frankerFaceZ';
+import sevenTvApi from '@/helpers/services/emotes/sevenTV';
 import { getPronouns } from '@/helpers/services/pronouns';
 import { getSystemProxiedMessage } from '@/helpers/services/pluralmind';
 import twitchApi from '@/helpers/services/twitch/twitchApi';
@@ -203,6 +204,16 @@ export default function useWidgetRequest() {
 						respond(ffz);
 						break;
 					}
+					case 'get-seventv-user': {
+						const { platform, account_id } = request.payload;
+						const account = getValidAccount(account_id);
+						const sevenTv = await sevenTvApi.getUser(
+							platform,
+							account.serviceId,
+						);
+						respond(sevenTv);
+						break;
+					}
 					case 'post-slime2-values': {
 						const sentValues = request.payload;
 
@@ -299,7 +310,11 @@ const SystemProxiedMessageRequestZ = z.object({
 });
 
 const PlatformRequestZ = z.object({
-	request_type: z.literal(['get-betterttv-user', 'get-frankerfacez-room']),
+	request_type: z.literal([
+		'get-betterttv-user',
+		'get-frankerfacez-room',
+		'get-seventv-user',
+	]),
 	payload: z.object({
 		account_id: z.string(),
 		platform: z.literal('twitch'),
