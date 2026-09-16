@@ -24,6 +24,7 @@ const Widget = {
 	readAccounts: {
 		twitch: { id: '' },
 		youtube: { id: '' },
+		tiktok: { id: '' },
 	},
 	values: new Map(),
 	messagesDeleted: new Set(),
@@ -42,6 +43,8 @@ const YouTube = {
 	thirdPartyEmotes: new Map(),
 };
 
+const NO_THIRD_PARTY_EMOTES = new Map();
+
 // Listeners
 // ***************************************************************************
 
@@ -49,6 +52,7 @@ addEventListener('slime2:widget-values', widgetValuesListener);
 addEventListener('slime2:widget-accounts', widgetAccountsListener);
 addEventListener('slime2:twitch-event', twitchEventListener);
 addEventListener('slime2:youtube-event', youtubeEventListener);
+addEventListener('slime2:tiktok-event', tiktokEventListener);
 
 function widgetValuesListener(event) {
 	Widget.values = new Map(Object.entries(event.detail));
@@ -263,11 +267,21 @@ async function widgetAccountsListener(event) {
 	const youtubeAccount = accounts.find(
 		account => account?.service === 'youtube',
 	);
+	const tiktokAccount = accounts.find(
+		account => account?.service === 'tiktok',
+	);
 
 	await Promise.all([
 		loadTwitchAccountAssets(twitchAccount),
 		loadYouTubeAccountAssets(youtubeAccount),
+		loadTikTokAccount(tiktokAccount),
 	]);
+}
+
+async function loadTikTokAccount(newReadAccount) {
+	Widget.readAccounts.tiktok = newReadAccount?.id
+		? newReadAccount
+		: { id: '' };
 }
 
 async function loadTwitchAccountAssets(newReadAccount) {
@@ -478,6 +492,19 @@ function youtubeEventListener(event) {
 		eventDate,
 		'youtube',
 	);
+}
+
+function tiktokEventListener(event) {
+	const eventDate = new Date(event.detail.timestamp);
+	const { type, data } = event.detail;
+
+	if (
+		type !== 'WebcastChatMessage' ||
+		(!data?.message?.text && !data?.message?.fragments?.length)
+	)
+		return;
+
+	return handleChatMessage(data, eventDate, 'tiktok');
 }
 
 // Twitch Event Handlers
@@ -983,9 +1010,15 @@ function buildTextFragments(textFragment, platform = 'twitch') {
 	const thirdPartyEmotes =
 		platform === 'youtube'
 			? YouTube.thirdPartyEmotes
-			: Twitch.thirdPartyEmotes;
+			: platform === 'twitch'
+				? Twitch.thirdPartyEmotes
+				: NO_THIRD_PARTY_EMOTES;
 
 	const thirdPartyEmoteNames = Array.from(thirdPartyEmotes.keys());
+	if (thirdPartyEmoteNames.length === 0) {
+		return [buildParsedTextFragment({ type: 'text', text })];
+	}
+
 	text.split(createEmoteRegex(thirdPartyEmoteNames)).forEach(part => {
 		// ignore empty strings that occur due to the split
 		if (part === '') return;
@@ -1063,6 +1096,14 @@ function buildMentionFragment(mentionFragment) {
 
 function buildEmoteFragment(emoteFragment, platform = 'twitch') {
 	const { text, emote } = emoteFragment;
+	if (platform === 'tiktok') {
+		return buildParsedEmoteFragment({
+			type: 'emote',
+			text,
+			srcAnimated: emote.url,
+			srcStatic: emote.url,
+		});
+	}
 
 	let srcAnimated = buildTwitchEmoteImageUrl(emote.id);
 	let srcStatic = buildTwitchEmoteImageUrl(emote.id, { format: 'static' });
@@ -1070,7 +1111,9 @@ function buildEmoteFragment(emoteFragment, platform = 'twitch') {
 	const thirdPartyEmotes =
 		platform === 'youtube'
 			? YouTube.thirdPartyEmotes
-			: Twitch.thirdPartyEmotes;
+			: platform === 'twitch'
+				? Twitch.thirdPartyEmotes
+				: NO_THIRD_PARTY_EMOTES;
 	const thirdPartyEmote = thirdPartyEmotes.get(text) ?? {};
 
 	// allow third party emotes to override twitch emotes

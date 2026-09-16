@@ -2,7 +2,7 @@
 	"id": "slime2:chat-box",
 	"name": "Slime2 Chat Box",
 	"creator": "Slime2",
-	"version": "1.6.1",
+	"version": "1.7.0",
 	"website": "https://slime2.stream/",
 	"support": "https://slime2.forumotion.com/f7-support",
 	"type": ["overlay"],
@@ -14,6 +14,10 @@
 		{
 			"type": "read",
 			"service": "youtube"
+		},
+		{
+			"type": "read",
+			"service": "tiktok"
 		}
 	],
 	"import": {

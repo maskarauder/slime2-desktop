@@ -15,6 +15,7 @@ mod commands;
 mod file;
 mod secret;
 mod server;
+mod tiktok;
 mod watcher;
 
 mod twitch;
@@ -168,6 +169,7 @@ async fn main() {
 		.plugin(tauri_plugin_clipboard_manager::init())
 		.plugin(tauri_plugin_opener::init())
 		.manage(connections.clone())
+		.manage(tiktok::TikTokConnections::default())
 		.manage(AppState::default())
 		.setup(|app: &mut tauri::App| {
 			log::info!("Welcome to Slime2!");
@@ -218,6 +220,8 @@ async fn main() {
 		})
 		.invoke_handler(tauri::generate_handler![
 			commands::send_websocket_message,
+			commands::start_tiktok_live,
+			commands::stop_tiktok_live,
 			commands::copy_widget,
 			commands::delete_widget,
 			commands::install_custom_widget,

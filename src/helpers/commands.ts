@@ -9,6 +9,17 @@ export async function sendWebsocketMessage(
 	return invoke('send_websocket_message', { message, channel });
 }
 
+export async function startTikTokLive(
+	accountId: string,
+	uniqueId: string,
+): Promise<void> {
+	return invoke('start_tiktok_live', { accountId, uniqueId });
+}
+
+export async function stopTikTokLive(accountId: string): Promise<void> {
+	return invoke('stop_tiktok_live', { accountId });
+}
+
 export async function installCustomWidget(zipPath: string): Promise<string> {
 	return invoke('install_custom_widget', { zipPath });
 }

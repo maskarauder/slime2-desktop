@@ -1,4 +1,5 @@
 import type { Account } from '@/helpers/json/accounts';
+import MusicNotesSvg from '@@/svg/MusicNoteSvg';
 import YoutubeSvg from '@@/svg/YoutubeSvg';
 import TwitchSvg from '../svg/TwitchSvg';
 import Tag from './Tag';
@@ -28,6 +29,15 @@ export default function AccountServiceTag({
 					label='YouTube'
 					icon={<YoutubeSvg className='h-4' />}
 					className='border-rose-950 bg-rose-800'
+					mini={mini}
+				/>
+			);
+		case 'tiktok':
+			return (
+				<Tag
+					label='TikTok LIVE'
+					icon={<MusicNotesSvg className='h-4' />}
+					className='border-cyan-400 bg-zinc-950 text-white'
 					mini={mini}
 				/>
 			);

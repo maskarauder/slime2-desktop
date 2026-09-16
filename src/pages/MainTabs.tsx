@@ -12,6 +12,7 @@ import useTileSwap from '@/contexts/tile_swap/useTileSwap';
 import WidgetsPanelProvider from '@/contexts/widgets_panel/WidgetsPanelProvider';
 import { TileColor } from '@/helpers/tileColors';
 import { useSystemFontsQuery } from '@/hooks/useSystemFontsQuery';
+import useTikTokChat from '@/hooks/useTikTokChat';
 import useTwitchBot from '@/hooks/useTwitchBot';
 import useTwitchWebsocket from '@/hooks/useTwitchWebsocket';
 import { useUnsuspender } from '@/hooks/useUnsuspender';
@@ -46,6 +47,7 @@ function MainTabsHooksWrapper({ children }: Props.WithChildren) {
 	useTwitchWebsocket();
 	useTwitchBot();
 	useYouTubeChat();
+	useTikTokChat();
 
 	return children;
 }

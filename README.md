@@ -43,3 +43,23 @@ Desktop app client ID for your fork:
 
 The current integration reads the authenticated channel's active live chat. It
 does not send YouTube chat messages.
+
+## Experimental TikTok LIVE chat setup
+
+TikTok does not provide an official public API for reading LIVE chat. This fork
+therefore connects through the third-party
+[Euler Stream](https://www.eulerstream.com/) WebSocket gateway. The integration
+is read-only and does not ask for a TikTok password or session cookie, but it may
+need updates when TikTok changes its internal LIVE service.
+
+1. Create an Euler Stream account and API key. Service limits and pricing are
+   controlled by Euler Stream.
+2. In Slime2, add a **Read Account**, choose **TikTok LIVE (Experimental)**,
+   and enter the broadcaster's public username plus your Euler Stream API key.
+3. Install or update the Slime2 Chat Box to version 1.7.0 or newer, then select
+   the TikTok read account in its TikTok account slot (or make it the default).
+
+Slime2 stores the Euler Stream key in the operating system credential store,
+connects from the Tauri backend, and automatically retries while the broadcaster
+is offline. TikTok chat sending and 7TV/BTTV/FFZ emotes are not supported for
+TikTok; native TikTok chat emotes are rendered when the gateway includes them.

@@ -96,7 +96,7 @@ async function accountsPath() {
 const Account = z.object({
 	id: z.string(),
 	serviceId: z.string(),
-	service: z.literal(['twitch', 'youtube']),
+	service: z.literal(['twitch', 'youtube', 'tiktok']),
 	username: z.string(),
 	displayName: z.string(),
 	image: z.string(),

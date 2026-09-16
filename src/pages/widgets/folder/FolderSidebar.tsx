@@ -27,7 +27,10 @@ export default function FolderSidebar() {
 	return (
 		<aside className='row-span-4 flex flex-2 flex-col items-center dark-container p-4 pt-8'>
 			<div className='flex w-full flex-1 flex-col items-center gap-4'>
-				<SelectedTilePreview tile={selectedTile} tileMeta={selectedTileMeta} />
+				<SelectedTilePreview
+					tile={selectedTile}
+					tileMeta={selectedTileMeta}
+				/>
 				<div className='flex w-full items-center justify-between border-t border-zinc-500 pt-4 text-zinc-200'>
 					<button
 						type='button'
@@ -38,7 +41,9 @@ export default function FolderSidebar() {
 						<p className='sr-only'>Previous Page</p>
 					</button>
 
-					<p className='text-5 font-bold text-white'>Page {page + 1}</p>
+					<p className='text-5 font-bold text-white'>
+						Page {page + 1}
+					</p>
 
 					<button
 						type='button'
@@ -79,7 +84,9 @@ function SelectedTilePreview({ tile, tileMeta }: SelectedTilePreviewProps) {
 		return (
 			<div className='flex flex-1 flex-col items-center gap-2 font-bold text-white text-shadow-[0_2px_black]'>
 				{movingTileMode ? (
-					<p className='text-center text-5'>Move into this empty slot?</p>
+					<p className='text-center text-5'>
+						Move into this empty slot?
+					</p>
 				) : (
 					<>
 						<h2 className='font-mochiy text-6'>Click to create!</h2>
@@ -110,7 +117,9 @@ function SelectedTilePreview({ tile, tileMeta }: SelectedTilePreviewProps) {
 				className={clsx(
 					'relative flex aspect-4/3 h-48 max-w-4/5 items-center justify-center overflow-hidden rounded-2 bg-linear-to-b ring-2 ring-black/50 outline-2 -outline-offset-2 outline-white/50',
 					tileColorClasses[
-						tile.type === 'folder' ? tileMeta.color : folderTileMeta.color
+						tile.type === 'folder'
+							? tileMeta.color
+							: folderTileMeta.color
 					],
 				)}
 			>
@@ -164,6 +173,9 @@ function WidgetTags({ widgetId }: WidgetTagsProps) {
 			)}
 			{services.includes('youtube') && (
 				<AccountServiceTag service='youtube' mini={mini} />
+			)}
+			{services.includes('tiktok') && (
+				<AccountServiceTag service='tiktok' mini={mini} />
 			)}
 			{widgetMeta.type.includes('bot') && (
 				<WidgetTypeTag type='bot' mini={mini} />

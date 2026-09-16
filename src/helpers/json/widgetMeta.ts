@@ -59,7 +59,7 @@ export const WidgetMetaSchema = z.object({
 		z.array(
 			z.object({
 				type: z.literal(['read', 'bot', 'mod']),
-				service: z.literal(['twitch', 'youtube']),
+				service: z.literal(['twitch', 'youtube', 'tiktok']),
 			}),
 		),
 		[],

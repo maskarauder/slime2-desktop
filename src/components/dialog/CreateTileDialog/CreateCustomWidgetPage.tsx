@@ -42,7 +42,9 @@ export default function CreateCustomWidgetPage() {
 				setError(null);
 			} catch (error) {
 				logZodError(error, extractedString);
-				setError('Widget ZIP config/meta.json is formatted incorrectly!');
+				setError(
+					'Widget ZIP config/meta.json is formatted incorrectly!',
+				);
 				setZipPath(null);
 				setWidgetMeta(null);
 			}
@@ -111,7 +113,9 @@ function WidgetMetaPreview(widgetMeta: WidgetMeta) {
 			<div className='flex flex-1 flex-col gap-2'>
 				<div className='flex items-center gap-6'>
 					<h3 className='flex-1 text-shadow-[0_1px_white]'>
-						<span className='font-mochiy text-zinc-800'>{widgetMeta.name}</span>
+						<span className='font-mochiy text-zinc-800'>
+							{widgetMeta.name}
+						</span>
 						<span className='pl-2 font-fredoka font-medium text-zinc-500'>
 							v{widgetMeta.version}
 						</span>
@@ -124,7 +128,12 @@ function WidgetMetaPreview(widgetMeta: WidgetMeta) {
 						{services.includes('youtube') && (
 							<AccountServiceTag service='youtube' />
 						)}
-						{widgetMeta.type.includes('bot') && <WidgetTypeTag type='bot' />}
+						{services.includes('tiktok') && (
+							<AccountServiceTag service='tiktok' />
+						)}
+						{widgetMeta.type.includes('bot') && (
+							<WidgetTypeTag type='bot' />
+						)}
 						{widgetMeta.type.includes('overlay') && (
 							<WidgetTypeTag type='overlay' />
 						)}
@@ -136,12 +145,18 @@ function WidgetMetaPreview(widgetMeta: WidgetMeta) {
 						className='flex flex-1 flex-col'
 						linkClassName='text-green-700 font-semibold'
 					>
-						<MetaDetail label='Creator'>{widgetMeta.creator}</MetaDetail>
+						<MetaDetail label='Creator'>
+							{widgetMeta.creator}
+						</MetaDetail>
 						{widgetMeta.website && (
-							<MetaDetail label='Website'>{widgetMeta.website}</MetaDetail>
+							<MetaDetail label='Website'>
+								{widgetMeta.website}
+							</MetaDetail>
 						)}
 						{widgetMeta.support && (
-							<MetaDetail label='Support'>{widgetMeta.support}</MetaDetail>
+							<MetaDetail label='Support'>
+								{widgetMeta.support}
+							</MetaDetail>
 						)}
 					</LinkifyText>
 				</div>

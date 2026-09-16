@@ -30,6 +30,7 @@ pub struct Account {
 enum AccountService {
 	Twitch,
 	Youtube,
+	Tiktok,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]

@@ -66,6 +66,29 @@ export async function sendYouTubeEvent(
 	);
 }
 
+export async function sendTikTokEvent(
+	accountId: string,
+	widgetId: string,
+	eventId: string,
+	eventType: string,
+	eventTimestamp: string,
+	data: unknown,
+) {
+	return sendWidgetMessage(
+		widgetId,
+		'tiktok-event',
+		{
+			id: eventId,
+			type: eventType,
+			version: '1',
+			account_id: accountId,
+			timestamp: eventTimestamp,
+			data,
+		},
+		{ dispatchToBot: true },
+	);
+}
+
 export async function sendMockTwitchEvent(
 	widgetId: string,
 	eventType: Twitch.EventSub.Type,

@@ -11,6 +11,7 @@ import AuthSuccessPage from './AuthSuccessPage';
 import AuthTypePage from './AuthTypePage';
 import AuthWidgetSlotPage from './AuthWidgetSlotPage';
 import ReauthPage from './ReauthPage';
+import TikTokAuthPage from './TikTokAuthPage';
 import TwitchAuthPage from './TwitchAuthPage';
 import YouTubeAuthPage from './YouTubeAuthPage';
 
@@ -23,7 +24,14 @@ type AuthenticationDialogProps = {
 };
 
 export type AuthenticationPages =
-	'type' | 'service' | 'twitch' | 'youtube' | 'success' | 'reauth' | 'slot';
+	| 'type'
+	| 'service'
+	| 'twitch'
+	| 'youtube'
+	| 'tiktok'
+	| 'success'
+	| 'reauth'
+	| 'slot';
 
 export type AuthenticationContext = {
 	service: Account['service'];
@@ -71,6 +79,16 @@ export default function AuthenticationDialog({
 				break;
 			case 'youtube':
 				setTitle(`Connect YouTube ${capitalizeWord(type)}`);
+				setOnBack(
+					reauth || slot
+						? undefined
+						: () => {
+								setPage('service');
+							},
+				);
+				break;
+			case 'tiktok':
+				setTitle('Connect TikTok LIVE Read Account');
 				setOnBack(
 					reauth || slot
 						? undefined
@@ -135,6 +153,8 @@ function AuthenticationPage() {
 			return <AuthWidgetSlotPage />;
 		case 'youtube':
 			return <YouTubeAuthPage />;
+		case 'tiktok':
+			return <TikTokAuthPage />;
 		default:
 			return <p>Unknown authentication page.</p>;
 	}

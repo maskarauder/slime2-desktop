@@ -4,7 +4,7 @@
 use crate::{
 	AppState, file, get_log_file_name,
 	secret::{delete_secret, get_secret, set_secret},
-	server,
+	server, tiktok,
 };
 use chrono::Local;
 use font_kit::source::SystemSource;
@@ -27,6 +27,12 @@ use tokio::{
 use url::Url;
 use walkdir::WalkDir;
 use zip::write::SimpleFileOptions;
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct StoredTokens {
+	access_token: String,
+}
 
 // file_path must not include ".json" extension
 #[tauri::command]
@@ -77,6 +83,38 @@ pub async fn send_websocket_message(
 		.iter()
 		.for_each(|connection| connection.send(message, channel));
 
+	Ok(())
+}
+
+#[tauri::command]
+pub async fn start_tiktok_live(
+	account_id: String,
+	unique_id: String,
+	app_handle: AppHandle,
+	state: State<'_, AppState>,
+	connections: State<'_, tiktok::TikTokConnections>,
+) -> Result<(), String> {
+	let stored_tokens = get_secret(state, &account_id)
+		.map_err(|_| "Unable to read the TikTok API key from the credential store.".to_string())?;
+	let tokens: StoredTokens = serde_json::from_str(&stored_tokens)
+		.map_err(|_| "The stored TikTok credentials are invalid.".to_string())?;
+
+	if tokens.access_token.trim().is_empty() {
+		return Err("The stored Euler Stream API key is empty.".to_string());
+	}
+
+	connections
+		.start(account_id, unique_id, tokens.access_token, app_handle)
+		.await;
+	Ok(())
+}
+
+#[tauri::command]
+pub async fn stop_tiktok_live(
+	account_id: String,
+	connections: State<'_, tiktok::TikTokConnections>,
+) -> Result<(), String> {
+	connections.stop(&account_id).await;
 	Ok(())
 }
 

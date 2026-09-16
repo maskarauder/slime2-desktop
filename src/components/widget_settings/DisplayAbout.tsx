@@ -35,7 +35,12 @@ export default function DisplayAbout({ widgetId }: DisplayAboutProps) {
 						{services.includes('youtube') && (
 							<AccountServiceTag service='youtube' />
 						)}
-						{widgetMeta.type.includes('bot') && <WidgetTypeTag type='bot' />}
+						{services.includes('tiktok') && (
+							<AccountServiceTag service='tiktok' />
+						)}
+						{widgetMeta.type.includes('bot') && (
+							<WidgetTypeTag type='bot' />
+						)}
 						{widgetMeta.type.includes('overlay') && (
 							<WidgetTypeTag type='overlay' />
 						)}
@@ -52,12 +57,18 @@ export default function DisplayAbout({ widgetId }: DisplayAboutProps) {
 						className='flex flex-1 flex-col'
 						linkClassName='text-green-700 font-semibold'
 					>
-						<MetaDetail label='Creator'>{widgetMeta.creator}</MetaDetail>
+						<MetaDetail label='Creator'>
+							{widgetMeta.creator}
+						</MetaDetail>
 						{widgetMeta.website && (
-							<MetaDetail label='Website'>{widgetMeta.website}</MetaDetail>
+							<MetaDetail label='Website'>
+								{widgetMeta.website}
+							</MetaDetail>
 						)}
 						{widgetMeta.support && (
-							<MetaDetail label='Support'>{widgetMeta.support}</MetaDetail>
+							<MetaDetail label='Support'>
+								{widgetMeta.support}
+							</MetaDetail>
 						)}
 					</LinkifyText>
 				</div>

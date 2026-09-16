@@ -3,6 +3,7 @@ import { Field, Input, Label } from '@headlessui/react';
 import clsx from 'clsx';
 
 type TextFieldProps = {
+	type?: 'text' | 'password';
 	label?: string;
 	value: string;
 	onChange: (text: string) => void;
@@ -16,6 +17,7 @@ type TextFieldProps = {
 };
 
 export default function TextField({
+	type = 'text',
 	label,
 	placeholder,
 	description,
@@ -46,6 +48,7 @@ export default function TextField({
 				)}
 
 				<Input
+					type={type}
 					ref={ref}
 					value={value}
 					onChange={event => {
@@ -74,6 +77,7 @@ export default function TextField({
 				{label && <Label className='input-label'>{label}</Label>}
 
 				<Input
+					type={type}
 					ref={ref}
 					value={value}
 					onChange={event => {
