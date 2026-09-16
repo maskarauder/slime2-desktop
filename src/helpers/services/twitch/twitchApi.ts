@@ -115,7 +115,7 @@ const twitchApi = {
 
 export default twitchApi;
 
-async function authorizedConfig<D = any>(
+async function authorizedConfig<D = unknown>(
 	accountId: string,
 	config?: AxiosRequestConfig<D>,
 ): Promise<AxiosRequestConfig<D>> {
@@ -131,36 +131,36 @@ async function authorizedConfig<D = any>(
 	};
 }
 
-async function twitchApiGet<T = any, R = AxiosResponse<T>, D = any>(
+async function twitchApiGet<T = unknown, D = unknown>(
 	url: string,
 	accountId: string,
 	config?: AxiosRequestConfig<D>,
-): Promise<R> {
-	return twitchApiAxios.get<T, R, D>(
+): Promise<AxiosResponse<T, D>> {
+	return twitchApiAxios.get<T, AxiosResponse<T, D>, D>(
 		url,
 		await authorizedConfig<D>(accountId, config),
 	);
 }
 
-async function twitchApiPost<T = any, R = AxiosResponse<T>, D = any>(
+async function twitchApiPost<T = unknown, D = unknown>(
 	url: string,
 	accountId: string,
 	data?: D,
 	config?: AxiosRequestConfig<D>,
-): Promise<R> {
-	return twitchApiAxios.post<T, R, D>(
+): Promise<AxiosResponse<T, D>> {
+	return twitchApiAxios.post<T, AxiosResponse<T, D>, D>(
 		url,
 		data,
 		await authorizedConfig<D>(accountId, config),
 	);
 }
 
-async function twitchApiDelete<T = any, R = AxiosResponse<T>, D = any>(
+async function twitchApiDelete<T = unknown, D = unknown>(
 	url: string,
 	accountId: string,
 	config?: AxiosRequestConfig<D>,
-) {
-	return twitchApiAxios.delete<T, R, D>(
+): Promise<AxiosResponse<T, D>> {
+	return twitchApiAxios.delete<T, AxiosResponse<T, D>, D>(
 		url,
 		await authorizedConfig<D>(accountId, config),
 	);
