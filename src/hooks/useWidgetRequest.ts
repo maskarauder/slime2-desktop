@@ -245,7 +245,10 @@ export default function useWidgetRequest() {
 					}
 					case 'get-seventv-user': {
 						const { platform, account_id } = request.payload;
-						const account = getValidAccount(account_id);
+						const account = getValidAccount(account_id, {
+							service: platform,
+							type: 'read',
+						});
 						const sevenTv = await sevenTvApi.getUser(
 							platform,
 							account.serviceId,
@@ -362,7 +365,7 @@ const SevenTvRequestZ = z.object({
 	request_type: z.literal('get-seventv-user'),
 	payload: z.object({
 		account_id: z.string(),
-		platform: z.literal('twitch'),
+		platform: z.literal(['twitch', 'youtube']),
 	}),
 });
 

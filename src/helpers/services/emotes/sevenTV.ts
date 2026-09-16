@@ -75,15 +75,20 @@ function normalizeEmote(emote: SevenTvEmote) {
 }
 
 const sevenTvApi = {
-	async getUser(platform: 'twitch', userId: string) {
+	async getUser(platform: 'twitch' | 'youtube', userId: string) {
+		// 7TV stores YouTube connections under its `google` platform name.
+		const sevenTvPlatform = platform === 'youtube' ? 'google' : platform;
 		const [globalEmoteSet, user] = await Promise.all([
 			getEmoteSet('global'),
 			sevenTvAxios
-				.get<SevenTvUserResponse>(`/users/${platform}/${userId}`, {
-					headers: {
-						'X-7tv-Missing-EmoteSet-Aware': '1',
+				.get<SevenTvUserResponse>(
+					`/users/${sevenTvPlatform}/${userId}`,
+					{
+						headers: {
+							'X-7tv-Missing-EmoteSet-Aware': '1',
+						},
 					},
-				})
+				)
 				.then(response => response.data)
 				.catch(() => null),
 		]);

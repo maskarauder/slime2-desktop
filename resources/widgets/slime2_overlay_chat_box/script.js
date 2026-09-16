@@ -391,9 +391,10 @@ async function loadYouTubeAccountAssets(newReadAccount) {
 	Widget.readAccounts.youtube = newReadAccount;
 	YouTube.thirdPartyEmotes.clear();
 
-	const [bttvUser, ffzRoom] = await Promise.all([
+	const [bttvUser, ffzRoom, sevenTvUser] = await Promise.all([
 		getBttvUser(newReadAccount),
 		getFfzRoom(newReadAccount),
+		getSevenTvUser(newReadAccount),
 	]);
 
 	bttvUser?.emotes?.forEach(emote => {
@@ -402,6 +403,13 @@ async function loadYouTubeAccountAssets(newReadAccount) {
 
 	ffzRoom?.emotes?.forEach(emote => {
 		YouTube.thirdPartyEmotes.set(emote.name, { type: 'ffz', data: emote });
+	});
+
+	sevenTvUser?.emotes?.forEach(emote => {
+		YouTube.thirdPartyEmotes.set(emote.name, {
+			type: 'seventv',
+			data: emote,
+		});
 	});
 }
 
@@ -1247,15 +1255,14 @@ async function getFfzRoom(account) {
 }
 
 /**
- * Returns 7TV global and Twitch user emotes, or `null` if both API requests
- * fail.
+ * Returns 7TV global and channel emotes, or `null` if both API requests fail.
  *
  * @returns {Promise<Object | null>}
  */
 async function getSevenTvUser(account) {
 	return slime2.request('get-seventv-user', {
 		account_id: account.id,
-		platform: 'twitch',
+		platform: account.service,
 	});
 }
 
