@@ -133,3 +133,46 @@ export async function revealLogFile(): Promise<void> {
 export async function openUrl(url: string): Promise<void> {
 	return invoke('open_url', { url });
 }
+
+export async function startYouTubeOAuth(
+	clientId: string,
+	codeChallenge: string,
+	state: string,
+	scope: string,
+): Promise<{ code: string; redirectUri: string }> {
+	return invoke('start_youtube_oauth', {
+		clientId,
+		codeChallenge,
+		state,
+		scope,
+	});
+}
+
+export type GoogleTokenResponse = {
+	access_token: string;
+	expires_in: number;
+	refresh_token?: string;
+	scope: string;
+	token_type: string;
+};
+
+export async function exchangeYouTubeOAuthCode(
+	clientId: string,
+	code: string,
+	codeVerifier: string,
+	redirectUri: string,
+): Promise<GoogleTokenResponse> {
+	return invoke('exchange_youtube_oauth_code', {
+		clientId,
+		code,
+		codeVerifier,
+		redirectUri,
+	});
+}
+
+export async function refreshYouTubeOAuthToken(
+	clientId: string,
+	refreshToken: string,
+): Promise<GoogleTokenResponse> {
+	return invoke('refresh_youtube_oauth_token', { clientId, refreshToken });
+}

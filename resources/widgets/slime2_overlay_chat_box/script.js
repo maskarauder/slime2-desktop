@@ -21,7 +21,10 @@ const ALPHA_MULTIPLY_COLOR_MATRIX = [
 ];
 
 const Widget = {
-	readAccount: { id: '' },
+	readAccounts: {
+		twitch: { id: '' },
+		youtube: { id: '' },
+	},
 	values: new Map(),
 	messagesDeleted: new Set(),
 	usersCleared: new Map(),
@@ -35,12 +38,17 @@ const Twitch = {
 	thirdPartyEmotes: new Map(),
 };
 
+const YouTube = {
+	thirdPartyEmotes: new Map(),
+};
+
 // Listeners
 // ***************************************************************************
 
 addEventListener('slime2:widget-values', widgetValuesListener);
 addEventListener('slime2:widget-accounts', widgetAccountsListener);
 addEventListener('slime2:twitch-event', twitchEventListener);
+addEventListener('slime2:youtube-event', youtubeEventListener);
 
 function widgetValuesListener(event) {
 	Widget.values = new Map(Object.entries(event.detail));
@@ -86,7 +94,10 @@ function widgetValuesListener(event) {
 		['max-width', `${Widget.values.get('max-width') ?? 500}px`],
 		['line-clamp', Widget.values.get('max-lines') ?? 4],
 		['message-color', Widget.values.get('message-color') ?? 'white'],
-		['username-color', Widget.values.get('custom-username-color') ?? 'white'],
+		[
+			'username-color',
+			Widget.values.get('custom-username-color') ?? 'white',
+		],
 		[
 			'username-font-name',
 			`"${Widget.values.get('custom-username-font-name') ?? 'Inter'}"`,
@@ -106,7 +117,10 @@ function widgetValuesListener(event) {
 
 	[
 		['customize-user', Widget.values.get('customize-user') ?? false],
-		['message-below-user', Widget.values.get('message-below-user') ?? false],
+		[
+			'message-below-user',
+			Widget.values.get('message-below-user') ?? false,
+		],
 	].forEach(([className, value]) => {
 		toggleClass(className, value);
 	});
@@ -150,7 +164,10 @@ function widgetValuesListener(event) {
 		['border-color', Widget.values.get('border-color') ?? 'transparent'],
 		['border-width', `${Widget.values.get('border-width') ?? 0}px`],
 		['border-radius', `${Widget.values.get('border-radius') ?? 0}px`],
-		['padding-horizontal', `${Widget.values.get('padding-horizontal') ?? 0}px`],
+		[
+			'padding-horizontal',
+			`${Widget.values.get('padding-horizontal') ?? 0}px`,
+		],
 		['padding-vertical', `${Widget.values.get('padding-vertical') ?? 0}px`],
 	].forEach(([cssVarName, value]) => {
 		setCustomCSS(cssVarName, value);
@@ -240,14 +257,37 @@ function widgetValuesListener(event) {
 
 async function widgetAccountsListener(event) {
 	const accounts = event.detail?.accounts ?? [];
-	const newReadAccount = accounts[0];
+	const twitchAccount = accounts.find(
+		account => account?.service === 'twitch',
+	);
+	const youtubeAccount = accounts.find(
+		account => account?.service === 'youtube',
+	);
 
-	// same account as stored account or undefined, skip processing
-	if (!newReadAccount?.id || Widget.readAccount.id === newReadAccount.id) {
+	await Promise.all([
+		loadTwitchAccountAssets(twitchAccount),
+		loadYouTubeAccountAssets(youtubeAccount),
+	]);
+}
+
+async function loadTwitchAccountAssets(newReadAccount) {
+	if (!newReadAccount?.id) {
+		Widget.readAccounts.twitch = { id: '' };
+		Twitch.badges.clear();
+		Twitch.cheermotes.clear();
+		Twitch.thirdPartyEmotes.clear();
 		return;
 	}
 
-	Widget.readAccount = newReadAccount;
+	// same account as stored account or undefined, skip processing
+	if (Widget.readAccounts.twitch.id === newReadAccount.id) {
+		return;
+	}
+
+	Widget.readAccounts.twitch = newReadAccount;
+	Twitch.badges.clear();
+	Twitch.cheermotes.clear();
+	Twitch.thirdPartyEmotes.clear();
 
 	const [
 		cheermotes,
@@ -257,12 +297,12 @@ async function widgetAccountsListener(event) {
 		ffzRoom,
 		sevenTvUser,
 	] = await Promise.all([
-		getTwitchCheermotes(),
-		getTwitchGlobalBadges(),
-		getTwitchChannelChatBadges(),
-		getBttvUser(),
-		getFfzRoom(),
-		getSevenTvUser(),
+		getTwitchCheermotes(newReadAccount),
+		getTwitchGlobalBadges(newReadAccount),
+		getTwitchChannelChatBadges(newReadAccount),
+		getBttvUser(newReadAccount),
+		getFfzRoom(newReadAccount),
+		getSevenTvUser(newReadAccount),
 	]);
 
 	// collect bttv emotes into Twitch.thirdPartyEmotes
@@ -277,7 +317,10 @@ async function widgetAccountsListener(event) {
 
 	// collect 7TV emotes into Twitch.thirdPartyEmotes
 	sevenTvUser?.emotes?.forEach(emote => {
-		Twitch.thirdPartyEmotes.set(emote.name, { type: 'seventv', data: emote });
+		Twitch.thirdPartyEmotes.set(emote.name, {
+			type: 'seventv',
+			data: emote,
+		});
 	});
 
 	// collect global badges into Twitch.badges
@@ -334,6 +377,34 @@ async function widgetAccountsListener(event) {
 	});
 }
 
+async function loadYouTubeAccountAssets(newReadAccount) {
+	if (!newReadAccount?.id) {
+		Widget.readAccounts.youtube = { id: '' };
+		YouTube.thirdPartyEmotes.clear();
+		return;
+	}
+
+	if (Widget.readAccounts.youtube.id === newReadAccount.id) {
+		return;
+	}
+
+	Widget.readAccounts.youtube = newReadAccount;
+	YouTube.thirdPartyEmotes.clear();
+
+	const [bttvUser, ffzRoom] = await Promise.all([
+		getBttvUser(newReadAccount),
+		getFfzRoom(newReadAccount),
+	]);
+
+	bttvUser?.emotes?.forEach(emote => {
+		YouTube.thirdPartyEmotes.set(emote.code, { type: 'bttv', data: emote });
+	});
+
+	ffzRoom?.emotes?.forEach(emote => {
+		YouTube.thirdPartyEmotes.set(emote.name, { type: 'ffz', data: emote });
+	});
+}
+
 function twitchEventListener(event) {
 	const eventDate = new Date(event.detail.timestamp);
 	const { type, data } = event.detail;
@@ -357,6 +428,50 @@ function twitchEventListener(event) {
 	}
 }
 
+function youtubeEventListener(event) {
+	const eventDate = new Date(event.detail.timestamp);
+	const { type, data } = event.detail;
+	const { snippet, authorDetails } = data;
+
+	if (type === 'userBannedEvent') {
+		const targetUserId =
+			snippet?.userBannedDetails?.bannedUserDetails?.channelId;
+		if (targetUserId) {
+			handleChatClearUserMessages(
+				{ target_user_id: targetUserId },
+				eventDate,
+			);
+		}
+		return;
+	}
+
+	if (
+		!snippet?.hasDisplayContent ||
+		!snippet.displayMessage ||
+		!authorDetails
+	) {
+		return;
+	}
+
+	return handleChatMessage(
+		{
+			message: {
+				text: snippet.displayMessage,
+				fragments: [{ type: 'text', text: snippet.displayMessage }],
+			},
+			chatter_user_name: authorDetails.displayName,
+			chatter_user_login: authorDetails.displayName,
+			chatter_user_id: authorDetails.channelId,
+			message_id: data.id,
+			color: null,
+			badges: [],
+			message_type: type,
+		},
+		eventDate,
+		'youtube',
+	);
+}
+
 // Twitch Event Handlers
 // ***************************************************************************
 
@@ -364,7 +479,7 @@ function twitchEventListener(event) {
  * @param {Object} data
  * @param {Date} eventDate
  */
-async function handleChatMessage(data, eventDate) {
+async function handleChatMessage(data, eventDate, platform = 'twitch') {
 	const {
 		message,
 		chatter_user_name,
@@ -415,7 +530,8 @@ async function handleChatMessage(data, eventDate) {
 		if (
 			(Widget.values.get('hide-users') ?? []).some(hideName => {
 				return (
-					chatter_user_name.toLowerCase() === hideName.toLowerCase() ||
+					chatter_user_name.toLowerCase() ===
+						hideName.toLowerCase() ||
 					chatter_user_login.toLowerCase() === hideName.toLowerCase()
 				);
 			})
@@ -424,19 +540,26 @@ async function handleChatMessage(data, eventDate) {
 		}
 
 		// filter out users who fail the follow age check
-		if (!(await checkFollowAge(chatter_user_id, eventDate))) {
+		if (
+			platform === 'twitch' &&
+			!(await checkFollowAge(chatter_user_id, eventDate))
+		) {
 			return;
 		}
 	}
 
 	// get user's pronouns and system information
 	const [pronouns, proxiedMessage] = await Promise.all([
-		getPronouns('twitch', chatter_user_id, chatter_user_login),
-		getSystemProxiedMessage(
-			'twitch',
-			chatter_user_id,
-			message.fragments,
-		),
+		platform === 'twitch'
+			? getPronouns('twitch', chatter_user_id, chatter_user_login)
+			: null,
+		platform === 'twitch'
+			? getSystemProxiedMessage(
+					'twitch',
+					chatter_user_id,
+					message.fragments,
+				)
+			: null,
 	]);
 
 	const messageTemplateClone = cloneTemplate('message-template');
@@ -498,7 +621,9 @@ async function handleChatMessage(data, eventDate) {
 	// build user
 	messageTemplateClone
 		.querySelector('.user')
-		.append(buildUserLabel(chatter_user_name, chatter_user_login, pronouns));
+		.append(
+			buildUserLabel(chatter_user_name, chatter_user_login, pronouns),
+		);
 
 	// build message text
 	/** @type {HTMLSpanElement} */
@@ -511,16 +636,22 @@ async function handleChatMessage(data, eventDate) {
 			// as long as pluralmind didn't remove it entirely
 			if (pluralmindFragment !== null) {
 				contentElement.append(
-					...fragmentsWithClass(buildMessageFragments(pluralmindFragment), 'fragment-proxied')
+					...fragmentsWithClass(
+						buildMessageFragments(pluralmindFragment, platform),
+						'fragment-proxied',
+					),
 				);
 			}
 
 			// append original fragment
 			contentElement.append(
-				...fragmentsWithClass(buildMessageFragments(fragment), 'fragment-original')
+				...fragmentsWithClass(
+					buildMessageFragments(fragment, platform),
+					'fragment-original',
+				),
 			);
 		} else {
-			contentElement.append(...buildMessageFragments(fragment));
+			contentElement.append(...buildMessageFragments(fragment, platform));
 		}
 	});
 
@@ -591,7 +722,8 @@ async function handleChatMessage(data, eventDate) {
 				// message deleted
 				Widget.messagesDeleted.has(message_id) ||
 				// user banned or timed out
-				eventDate < (Widget.usersCleared.get(chatter_user_id) ?? EPOCH_DATE)
+				eventDate <
+					(Widget.usersCleared.get(chatter_user_id) ?? EPOCH_DATE)
 			) {
 				// if message was already deleted by the above checks, don't render
 				return;
@@ -603,7 +735,8 @@ async function handleChatMessage(data, eventDate) {
 			const soundSrc = Widget.values.get('sound');
 			if (soundSrc) {
 				const now = new Date();
-				const cooldown = (Widget.values.get('sound-cooldown') ?? 5) * 1000;
+				const cooldown =
+					(Widget.values.get('sound-cooldown') ?? 5) * 1000;
 				const timeSinceLastSound =
 					now.getTime() - Widget.lastPlayedSound.getTime();
 
@@ -691,7 +824,8 @@ function displayMessage(messageTemplateClone, messageId) {
 
 					const top = offsetTop;
 					const left = offsetLeft;
-					const bottom = parent.offsetHeight - offsetTop - offsetHeight;
+					const bottom =
+						parent.offsetHeight - offsetTop - offsetHeight;
 					const right = parent.offsetWidth - offsetLeft - offsetWidth;
 
 					if (top < 0 || left < 0 || bottom < 0 || right < 0) {
@@ -776,7 +910,9 @@ function buildUserLabel(
 	const userClone = cloneTemplate('user-template');
 
 	if (proxied) {
-		userClone.querySelector('.user-label').classList.add('user-label-proxied');
+		userClone
+			.querySelector('.user-label')
+			.classList.add('user-label-proxied');
 	} else if (displayName.toLowerCase() !== username.toLowerCase()) {
 		// https://blog.twitch.tv/en/2016/08/22/localized-display-names-e00ee8d3250a/
 		userClone
@@ -814,17 +950,17 @@ function buildBadges(badges) {
 }
 
 /** @returns {DocumentFragment[]} */
-function buildMessageFragments(fragment) {
+function buildMessageFragments(fragment, platform = 'twitch') {
 	switch (fragment.type) {
 		case 'emote':
-			return [buildEmoteFragment(fragment)];
+			return [buildEmoteFragment(fragment, platform)];
 		case 'mention':
 			return [buildMentionFragment(fragment)];
 		case 'cheermote':
 			return [buildCheermoteFragment(fragment)];
 		case 'text':
 		default:
-			return buildTextFragments(fragment);
+			return buildTextFragments(fragment, platform);
 	}
 }
 
@@ -832,17 +968,21 @@ function buildMessageFragments(fragment) {
  * @param {{ type: 'text'; text: string }} textFragment
  * @returns {DocumentFragment[]}
  */
-function buildTextFragments(textFragment) {
+function buildTextFragments(textFragment, platform = 'twitch') {
 	const { text } = textFragment;
 
 	const parsedFragments = [];
+	const thirdPartyEmotes =
+		platform === 'youtube'
+			? YouTube.thirdPartyEmotes
+			: Twitch.thirdPartyEmotes;
 
-	const thirdPartyEmoteNames = Array.from(Twitch.thirdPartyEmotes.keys());
+	const thirdPartyEmoteNames = Array.from(thirdPartyEmotes.keys());
 	text.split(createEmoteRegex(thirdPartyEmoteNames)).forEach(part => {
 		// ignore empty strings that occur due to the split
 		if (part === '') return;
 
-		const thirdPartyEmote = Twitch.thirdPartyEmotes.get(part) ?? {};
+		const thirdPartyEmote = thirdPartyEmotes.get(part) ?? {};
 
 		if (thirdPartyEmote.type === 'bttv') {
 			const { id, animated } = thirdPartyEmote.data;
@@ -907,18 +1047,23 @@ function buildMentionFragment(mentionFragment) {
 	const { mention } = mentionFragment;
 
 	const mentionClone = cloneTemplate('mention-fragment-template');
-	mentionClone.querySelector('.mention').textContent = `@${mention.user_login}`;
+	mentionClone.querySelector('.mention').textContent =
+		`@${mention.user_login}`;
 
 	return mentionClone;
 }
 
-function buildEmoteFragment(emoteFragment) {
+function buildEmoteFragment(emoteFragment, platform = 'twitch') {
 	const { text, emote } = emoteFragment;
 
 	let srcAnimated = buildTwitchEmoteImageUrl(emote.id);
 	let srcStatic = buildTwitchEmoteImageUrl(emote.id, { format: 'static' });
 
-	const thirdPartyEmote = Twitch.thirdPartyEmotes.get(text) ?? {};
+	const thirdPartyEmotes =
+		platform === 'youtube'
+			? YouTube.thirdPartyEmotes
+			: Twitch.thirdPartyEmotes;
+	const thirdPartyEmote = thirdPartyEmotes.get(text) ?? {};
 
 	// allow third party emotes to override twitch emotes
 	if (thirdPartyEmote.type === 'bttv') {
@@ -928,7 +1073,9 @@ function buildEmoteFragment(emoteFragment) {
 	} else if (thirdPartyEmote.type === 'ffz') {
 		const { urls, animated: animatedUrls } = thirdPartyEmote.data;
 		srcAnimated = buildFfzEmoteImageUrl(urls, animatedUrls);
-		srcStatic = buildFfzEmoteImageUrl(urls, animatedUrls, { useStatic: true });
+		srcStatic = buildFfzEmoteImageUrl(urls, animatedUrls, {
+			useStatic: true,
+		});
 	} else if (thirdPartyEmote.type === 'seventv') {
 		srcAnimated = thirdPartyEmote.data.srcAnimated;
 		srcStatic = thirdPartyEmote.data.srcStatic;
@@ -975,7 +1122,8 @@ function buildCheermoteFragment(cheermoteFragment) {
 			tier.images.dark.animated['4'];
 		cheermoteClone.querySelector('.cheermote.static').src =
 			tier.images.dark.static['4'];
-		cheermoteClone.querySelector('.cheer-amount').textContent = cheermote.bits;
+		cheermoteClone.querySelector('.cheer-amount').textContent =
+			cheermote.bits;
 		cheermoteClone
 			.querySelector('.cheer-amount')
 			.style.setProperty('color', tier.color);
@@ -1031,7 +1179,7 @@ async function getSystemProxiedMessage(platform, userId, message) {
  */
 async function getTwitchFollowDate(userId) {
 	return slime2.request('get-twitch-follow-date', {
-		account_id: Widget.readAccount.id,
+		account_id: Widget.readAccounts.twitch.id,
 		user_id: userId,
 	});
 }
@@ -1042,9 +1190,9 @@ async function getTwitchFollowDate(userId) {
  *
  * @returns {Promise<Object[]>}
  */
-async function getTwitchCheermotes() {
+async function getTwitchCheermotes(account) {
 	return slime2.request('get-twitch-cheermotes', {
-		account_id: Widget.readAccount.id,
+		account_id: account.id,
 	});
 }
 
@@ -1054,9 +1202,9 @@ async function getTwitchCheermotes() {
  *
  * @returns {Promise<Object[]>}
  */
-async function getTwitchGlobalBadges() {
+async function getTwitchGlobalBadges(account) {
 	return slime2.request('get-twitch-global-badges', {
-		account_id: Widget.readAccount.id,
+		account_id: account.id,
 	});
 }
 
@@ -1066,9 +1214,9 @@ async function getTwitchGlobalBadges() {
  *
  * @returns {Promise<Object[]>}
  */
-async function getTwitchChannelChatBadges() {
+async function getTwitchChannelChatBadges(account) {
 	return slime2.request('get-twitch-channel-chat-badges', {
-		account_id: Widget.readAccount.id,
+		account_id: account.id,
 	});
 }
 
@@ -1078,10 +1226,10 @@ async function getTwitchChannelChatBadges() {
  *
  * @returns {Promise<Object | null>}
  */
-async function getBttvUser() {
+async function getBttvUser(account) {
 	return slime2.request('get-betterttv-user', {
-		account_id: Widget.readAccount.id,
-		platform: 'twitch',
+		account_id: account.id,
+		platform: account.service,
 	});
 }
 
@@ -1091,10 +1239,10 @@ async function getBttvUser() {
  *
  * @returns {Promise<Object | null>}
  */
-async function getFfzRoom() {
+async function getFfzRoom(account) {
 	return slime2.request('get-frankerfacez-room', {
-		account_id: Widget.readAccount.id,
-		platform: 'twitch',
+		account_id: account.id,
+		platform: account.service,
 	});
 }
 
@@ -1104,9 +1252,9 @@ async function getFfzRoom() {
  *
  * @returns {Promise<Object | null>}
  */
-async function getSevenTvUser() {
+async function getSevenTvUser(account) {
 	return slime2.request('get-seventv-user', {
-		account_id: Widget.readAccount.id,
+		account_id: account.id,
 		platform: 'twitch',
 	});
 }
@@ -1130,7 +1278,8 @@ async function checkFollowAge(userId, eventDate) {
 	const followDate = new Date(followDateString);
 
 	// follow age given in hours
-	const minFollowTime = (Widget.values.get('follow-age') ?? 0) * 60 * 60 * 1000;
+	const minFollowTime =
+		(Widget.values.get('follow-age') ?? 0) * 60 * 60 * 1000;
 	const userFollowTime = eventDate.getTime() - followDate.getTime();
 
 	return userFollowTime > minFollowTime;
@@ -1214,6 +1363,7 @@ function buildFfzEmoteImageUrl(
 
 	return url;
 }
+
 /**
  * Given the ID of an HTML template, returns a copy of its DocumentFragment
  * contents
@@ -1293,7 +1443,9 @@ function accessibleTextColor(textColor, backgroundColor) {
 	});
 
 	for (const potentialColor of potentialColors) {
-		if (Math.abs(Color.contrastAPCA(backgroundColor, potentialColor)) > 60) {
+		if (
+			Math.abs(Color.contrastAPCA(backgroundColor, potentialColor)) > 60
+		) {
 			newColor = potentialColor;
 			break;
 		}

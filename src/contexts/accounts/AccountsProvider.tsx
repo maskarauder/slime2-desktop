@@ -5,6 +5,9 @@ import {
 	loadAccounts,
 } from '@/helpers/json/accounts';
 import twitchApi from '@/helpers/services/twitch/twitchApi';
+import youtubeApi from '@/helpers/services/youtube/youtubeApi';
+import { YouTubeReauthorizationError } from '@/helpers/services/youtube/youtubeAuth';
+import axios from 'axios';
 import { useEffect, useReducer } from 'react';
 import { AccountsContext } from './useAccounts';
 import {
@@ -37,15 +40,18 @@ export default function AccountsProvider({ children }: Props.WithChildren) {
 			Object.values(accounts).map(async account => {
 				if (account.reauthorize) return;
 
-				if (account.service === 'twitch') {
-					try {
+				try {
+					if (account.service === 'twitch') {
 						// update user details
 						const response = await twitchApi.getUser(
 							account.id,
 							account.serviceId,
 						);
 						const user = response.data.data[0];
-						if (!user) throw new Error('Twitch user not found while updating!');
+						if (!user)
+							throw new Error(
+								'Twitch user not found while updating!',
+							);
 
 						if (
 							account.username !== user.login ||
@@ -59,21 +65,60 @@ export default function AccountsProvider({ children }: Props.WithChildren) {
 								image: user.profile_image_url,
 							});
 						}
-					} catch {
-						// unable to get user details
-						// delete tokens and set account to need reauthorization
-						updateAccount({
-							...account,
-							reauthorize: true,
-						});
-
-						try {
-							deleteTokens(account.id);
-						} catch (error) {
-							console.error(error);
+					} else if (account.service === 'youtube') {
+						const response = await youtubeApi.getMyChannel(
+							account.id,
+						);
+						const channel = response.data.items?.[0];
+						if (!channel) {
+							throw new Error(
+								'YouTube channel not found while updating!',
+							);
 						}
 
+						const username =
+							channel.snippet.customUrl?.replace(/^@/, '') ??
+							channel.id;
+						const image =
+							channel.snippet.thumbnails?.high?.url ??
+							channel.snippet.thumbnails?.medium?.url ??
+							channel.snippet.thumbnails?.default?.url ??
+							'';
+						if (
+							account.username !== username ||
+							account.displayName !== channel.snippet.title ||
+							account.image !== image
+						) {
+							updateAccount({
+								...account,
+								username,
+								displayName: channel.snippet.title,
+								image,
+							});
+						}
+					}
+				} catch (error) {
+					console.error(
+						`Unable to update ${account.service} account:`,
+						error,
+					);
+					if (
+						account.service === 'youtube' &&
+						!(error instanceof YouTubeReauthorizationError) &&
+						!(
+							axios.isAxiosError(error) &&
+							error.response?.status === 401
+						)
+					) {
 						return;
+					}
+
+					updateAccount({ ...account, reauthorize: true });
+
+					try {
+						await deleteTokens(account.id);
+					} catch (deleteError) {
+						console.error(deleteError);
 					}
 				}
 			}),

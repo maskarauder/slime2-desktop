@@ -45,11 +45,13 @@ export async function setTokens(
 	accountId: string,
 	accessToken: string,
 	refreshToken: string,
+	metadata: Pick<Tokens, 'clientId' | 'expiresAt'> = {},
 ): Promise<Tokens> {
 	const tokens: Tokens = {
 		accessToken,
 		refreshToken,
 		validatedAt: Date.now(),
+		...metadata,
 	};
 	await setSecretKey(accountId, JSON.stringify(tokens));
 	return tokens;
@@ -102,7 +104,10 @@ const Account = z.object({
 	type: z.literal(['read', 'bot', 'mod']),
 	reauthorize: z.boolean(),
 	// keys are widget IDs, values are indices
-	widgets: z.catch(z.record(z.string(), z.number().check(z.nonnegative())), {}),
+	widgets: z.catch(
+		z.record(z.string(), z.number().check(z.nonnegative())),
+		{},
+	),
 	default: z.boolean(),
 });
 export type Account = z.infer<typeof Account>;
@@ -114,5 +119,7 @@ const Tokens = z.object({
 	accessToken: z.string(),
 	refreshToken: z.string(),
 	validatedAt: z.number(),
+	clientId: z.optional(z.string()),
+	expiresAt: z.optional(z.number()),
 });
 export type Tokens = z.infer<typeof Tokens>;

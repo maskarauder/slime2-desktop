@@ -18,7 +18,6 @@ mod server;
 mod watcher;
 
 mod twitch;
-use twitch::websocket::connect
 mod account;
 
 // thanks to https://github.com/tauri-apps/tauri/discussions/6309#discussioncomment-10295527
@@ -239,6 +238,9 @@ async fn main() {
 			commands::save_temp_widget_core_icon,
 			commands::reveal_log_file,
 			commands::open_url,
+			commands::start_youtube_oauth,
+			commands::exchange_youtube_oauth_code,
+			commands::refresh_youtube_oauth_token,
 			commands::move_legacy_media_to_gallery,
 		])
 		.run(tauri::generate_context!())

@@ -43,6 +43,29 @@ export async function sendTwitchEvent(
 	);
 }
 
+export async function sendYouTubeEvent(
+	accountId: string,
+	widgetId: string,
+	eventId: string,
+	eventType: string,
+	eventTimestamp: string,
+	data: unknown,
+) {
+	return sendWidgetMessage(
+		widgetId,
+		'youtube-event',
+		{
+			id: eventId,
+			type: eventType,
+			version: '1',
+			account_id: accountId,
+			timestamp: eventTimestamp,
+			data,
+		},
+		{ dispatchToBot: true },
+	);
+}
+
 export async function sendMockTwitchEvent(
 	widgetId: string,
 	eventType: Twitch.EventSub.Type,
@@ -159,7 +182,9 @@ function mergeDefaultValues(
 
 				if (
 					Array.isArray(subsections) &&
-					subsections.every(subsection => typeof subsection === 'string')
+					subsections.every(
+						subsection => typeof subsection === 'string',
+					)
 				) {
 					subsections.forEach(subsectionId => {
 						Object.entries(setting.settings).forEach(
@@ -184,7 +209,12 @@ function mergeDefaultValues(
 			} else if (setting.type === 'section') {
 				Object.entries(setting.settings).forEach(
 					([subsettingId, subsetting]) => {
-						mergeValue(widgetId, subsettingId, subsetting, mergedValues);
+						mergeValue(
+							widgetId,
+							subsettingId,
+							subsetting,
+							mergedValues,
+						);
 					},
 				);
 			} else {

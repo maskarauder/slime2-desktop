@@ -12,6 +12,7 @@ import AuthTypePage from './AuthTypePage';
 import AuthWidgetSlotPage from './AuthWidgetSlotPage';
 import ReauthPage from './ReauthPage';
 import TwitchAuthPage from './TwitchAuthPage';
+import YouTubeAuthPage from './YouTubeAuthPage';
 
 type AuthenticationDialogProps = {
 	reauth?: Account;
@@ -22,13 +23,7 @@ type AuthenticationDialogProps = {
 };
 
 export type AuthenticationPages =
-	| 'type'
-	| 'service'
-	| 'twitch'
-	| 'youtube'
-	| 'success'
-	| 'reauth'
-	| 'slot';
+	'type' | 'service' | 'twitch' | 'youtube' | 'success' | 'reauth' | 'slot';
 
 export type AuthenticationContext = {
 	service: Account['service'];
@@ -139,7 +134,8 @@ function AuthenticationPage() {
 		case 'slot':
 			return <AuthWidgetSlotPage />;
 		case 'youtube':
+			return <YouTubeAuthPage />;
 		default:
-			return <p>missing!</p>;
+			return <p>Unknown authentication page.</p>;
 	}
 }

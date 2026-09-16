@@ -43,7 +43,9 @@ export default function useWidgetRequest() {
 	useEffect(() => {
 		function botRequestListener(event: CustomEventInit<WidgetRequest>) {
 			dispatchEvent(
-				new CustomEvent(COMBINED_REQUEST_EVENT_TYPE, { detail: event.detail }),
+				new CustomEvent(COMBINED_REQUEST_EVENT_TYPE, {
+					detail: event.detail,
+				}),
 			);
 		}
 
@@ -75,7 +77,12 @@ export default function useWidgetRequest() {
 				const { widget_id, request_id, request_type } = request;
 
 				async function respond(response: unknown) {
-					sendWidgetResponse(widget_id, request_type, request_id, response);
+					sendWidgetResponse(
+						widget_id,
+						request_type,
+						request_id,
+						response,
+					);
 				}
 
 				function getValidAccount(
@@ -88,7 +95,9 @@ export default function useWidgetRequest() {
 					const account = getAccount(accountId);
 
 					if (!account) {
-						throw new Error(`Slime2 account with ID ${accountId} not found!`);
+						throw new Error(
+							`Slime2 account with ID ${accountId} not found!`,
+						);
 					}
 
 					if (
@@ -109,13 +118,21 @@ export default function useWidgetRequest() {
 				switch (request.request_type) {
 					case 'get-pronouns': {
 						const { platform, user_id, username } = request.payload;
-						const pronouns = await getPronouns(platform, user_id, username);
+						const pronouns = await getPronouns(
+							platform,
+							user_id,
+							username,
+						);
 						respond(pronouns);
 						break;
 					}
 					case 'get-system-proxied-message': {
 						const { platform, user_id, message } = request.payload;
-						const spm = await getSystemProxiedMessage(platform, user_id, message);
+						const spm = await getSystemProxiedMessage(
+							platform,
+							user_id,
+							message,
+						);
 						respond(spm);
 						break;
 					}
@@ -126,7 +143,10 @@ export default function useWidgetRequest() {
 							type: 'read',
 						});
 
-						const followDate = await getTwitchFollowDate(account, user_id);
+						const followDate = await getTwitchFollowDate(
+							account,
+							user_id,
+						);
 
 						respond(followDate);
 						break;
@@ -150,7 +170,9 @@ export default function useWidgetRequest() {
 						const { account_id } = request.payload;
 						const account = getValidAccount(account_id);
 
-						const globalBadges = await twitchApi.getGlobalBadges(account.id);
+						const globalBadges = await twitchApi.getGlobalBadges(
+							account.id,
+						);
 
 						respond(globalBadges.data.data);
 						break;
@@ -162,10 +184,11 @@ export default function useWidgetRequest() {
 							type: 'read',
 						});
 
-						const channelBadges = await twitchApi.getChannelChatBadges(
-							account.id,
-							account.serviceId,
-						);
+						const channelBadges =
+							await twitchApi.getChannelChatBadges(
+								account.id,
+								account.serviceId,
+							);
 						respond(channelBadges.data.data);
 						break;
 					}
@@ -176,31 +199,47 @@ export default function useWidgetRequest() {
 							type: 'bot',
 						});
 
-						const { broadcaster_id, message, reply_parent_message_id } =
-							request.payload;
-
-						const chatMessageResponse = await twitchApi.sendChatMessage(
-							account.id,
+						const {
 							broadcaster_id,
-							account.serviceId,
 							message,
 							reply_parent_message_id,
-						);
+						} = request.payload;
+
+						const chatMessageResponse =
+							await twitchApi.sendChatMessage(
+								account.id,
+								broadcaster_id,
+								account.serviceId,
+								message,
+								reply_parent_message_id,
+							);
 
 						respond(chatMessageResponse.data.data[0]);
 						break;
 					}
 					case 'get-betterttv-user': {
 						const { platform, account_id } = request.payload;
-						const account = getValidAccount(account_id);
-						const bttv = await bttvApi.getUser(platform, account.serviceId);
+						const account = getValidAccount(account_id, {
+							service: platform,
+							type: 'read',
+						});
+						const bttv = await bttvApi.getUser(
+							platform,
+							account.serviceId,
+						);
 						respond(bttv);
 						break;
 					}
 					case 'get-frankerfacez-room': {
 						const { platform, account_id } = request.payload;
-						const account = getValidAccount(account_id);
-						const ffz = await ffzApi.getRoom(platform, account.serviceId);
+						const account = getValidAccount(account_id, {
+							service: platform,
+							type: 'read',
+						});
+						const ffz = await ffzApi.getRoom(
+							platform,
+							account.serviceId,
+						);
 						respond(ffz);
 						break;
 					}
@@ -301,20 +340,26 @@ const SystemProxiedMessageRequestZ = z.object({
 		user_id: z.string(),
 		message: z.union([
 			z.string(),
-			z.array(z.looseObject({
-				type: z.string(),
-				text: z.optional(z.string()),
-			})),
+			z.array(
+				z.looseObject({
+					type: z.string(),
+					text: z.optional(z.string()),
+				}),
+			),
 		]),
 	}),
 });
 
-const PlatformRequestZ = z.object({
-	request_type: z.literal([
-		'get-betterttv-user',
-		'get-frankerfacez-room',
-		'get-seventv-user',
-	]),
+const ThirdPartyPlatformRequestZ = z.object({
+	request_type: z.literal(['get-betterttv-user', 'get-frankerfacez-room']),
+	payload: z.object({
+		account_id: z.string(),
+		platform: z.literal(['twitch', 'youtube']),
+	}),
+});
+
+const SevenTvRequestZ = z.object({
+	request_type: z.literal('get-seventv-user'),
 	payload: z.object({
 		account_id: z.string(),
 		platform: z.literal('twitch'),
@@ -357,7 +402,8 @@ const WidgetRequestZ = z.intersection(
 		SystemProxiedMessageRequestZ,
 		FollowDateRequestZ,
 		AccountRequestZ,
-		PlatformRequestZ,
+		ThirdPartyPlatformRequestZ,
+		SevenTvRequestZ,
 		ChatMessageRequestZ,
 		ValuesRequestZ,
 	]),

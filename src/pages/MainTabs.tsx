@@ -18,6 +18,7 @@ import { useUnsuspender } from '@/hooks/useUnsuspender';
 import useWidgetCoreChange from '@/hooks/useWidgetCoreChange';
 import useWidgetRegistration from '@/hooks/useWidgetRegistration';
 import useWidgetRequest from '@/hooks/useWidgetRequest';
+import useYouTubeChat from '@/hooks/useYouTubeChat';
 import PaperAirplaneSvg from '@@/svg/PaperAirplaneSvg';
 import type { TabPanelProps, TabProps } from '@ariakit/react';
 import { Tab, TabList, TabProvider } from '@ariakit/react';
@@ -44,12 +45,15 @@ function MainTabsHooksWrapper({ children }: Props.WithChildren) {
 	useWidgetCoreChange();
 	useTwitchWebsocket();
 	useTwitchBot();
+	useYouTubeChat();
 
 	return children;
 }
 
 function MainTabs() {
-	const [selectedId, setSelectedId] = useState<string | null | undefined>('1');
+	const [selectedId, setSelectedId] = useState<string | null | undefined>(
+		'1',
+	);
 	const { folderId } = useFolderId();
 	const { tileMeta } = useTileMeta(folderId);
 	const { settings } = useSettings();
@@ -140,7 +144,8 @@ function MainTabs() {
 									tileMeta.color === TileColor.Green,
 								['from-emerald-700 to-teal-600']:
 									tileMeta.color === TileColor.Teal,
-								['from-sky-700 to-cyan-600']: tileMeta.color === TileColor.Blue,
+								['from-sky-700 to-cyan-600']:
+									tileMeta.color === TileColor.Blue,
 								['bg-violet-400 from-purple-950/50 to-violet-700/40']:
 									tileMeta.color === TileColor.Purple,
 							},
@@ -193,7 +198,7 @@ const StyledTab = forwardRef<
 			{...rest}
 			className={clsx(
 				'group relative flex h-10 flex-1 overflow-hidden rounded-t-4 border border-white/50 border-b-zinc-800 px-4 py-1 text-left text-5 transition-[height] ease-out focus-visible:outline-4 focus-visible:outline-offset-4! focus-visible:outline-white aria-selected:h-full aria-selected:border-b-0 aria-selected:text-7 over:h-full',
-				props.className,
+				className,
 			)}
 		>
 			<div className='absolute inset-0 bottom-[45%] bg-linear-to-b from-white/30 to-white/20'></div>
@@ -214,7 +219,7 @@ const StyledPanel = forwardRef<
 		<TabPanelWithPrevious
 			ref={ref}
 			{...rest}
-			className='animated-tab-panel flex w-full flex-1'
+			className={clsx('animated-tab-panel flex w-full flex-1', className)}
 			render={<section />}
 			focusable={false}
 		>

@@ -67,6 +67,7 @@
 					"https://id.twitch.tv",
 					"https://api.twitch.tv",
 					"wss://eventsub.wss.twitch.tv",
+					"https://www.googleapis.com",
 					"https://api.pronouns.alejo.io",
 					"https://pronoundb.org",
 					"https://api.betterttv.net",

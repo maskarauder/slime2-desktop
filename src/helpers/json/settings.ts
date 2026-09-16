@@ -10,6 +10,7 @@ export const DEFAULT_SETTINGS: Settings = {
 	devMode: false,
 	disableAnimations: false,
 	logWidgetEvents: false,
+	youtubeClientId: '',
 };
 
 // functions
@@ -41,6 +42,7 @@ const OptionalSettings = z.partial(
 		devMode: z.boolean(),
 		disableAnimations: z.boolean(),
 		logWidgetEvents: z.boolean(),
+		youtubeClientId: z.string(),
 	}),
 );
 

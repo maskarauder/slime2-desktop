@@ -45,7 +45,6 @@ async function getEmoteSet(id: string): Promise<SevenTvEmoteSet | null> {
 
 function normalizeEmote(emote: SevenTvEmote) {
 	const host = emote.data?.host;
-
 	let largestWebp: SevenTvImageFile | undefined;
 
 	for (const file of host?.files ?? []) {
@@ -62,7 +61,6 @@ function normalizeEmote(emote: SevenTvEmote) {
 				'',
 			)
 		: `https://cdn.7tv.app/emote/${emote.id}`;
-
 	const animatedFilename = largestWebp?.name ?? '4x.webp';
 	const staticFilename =
 		largestWebp?.static_name ??
@@ -91,7 +89,6 @@ const sevenTvApi = {
 		]);
 
 		let channelEmoteSet = user?.emote_set ?? null;
-
 		if (!channelEmoteSet && user?.emote_set_id) {
 			channelEmoteSet = await getEmoteSet(user.emote_set_id);
 		}
