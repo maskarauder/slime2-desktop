@@ -833,14 +833,20 @@ pub async fn refresh_youtube_oauth_token(
 async fn request_google_tokens(
 	params: &[(&str, String)],
 ) -> Result<GoogleTokenResponse, String> {
-	let mut serializer = url::form_urlencoded::Serializer::new(String::new());
-	for (key, value) in params {
-		serializer.append_pair(key, value);
-	}
+	// `Serializer` contains a non-Send encoding callback. Finish and drop it
+	// before the request reaches an await point so Tauri can run this command
+	// on its multithreaded async runtime.
+	let request_body = {
+		let mut serializer = url::form_urlencoded::Serializer::new(String::new());
+		for (key, value) in params {
+			serializer.append_pair(key, value);
+		}
+		serializer.finish()
+	};
 	let response = reqwest::Client::new()
 		.post("https://oauth2.googleapis.com/token")
 		.header("Content-Type", "application/x-www-form-urlencoded")
-		.body(serializer.finish())
+		.body(request_body)
 		.send()
 		.await
 		.map_err(|error| format!("Unable to contact Google OAuth: {error}"))?;
