@@ -869,9 +869,7 @@ function buildTextFragments(textFragment) {
 				srcStatic,
 			});
 		} else if (thirdPartyEmote.type === 'seventv') {
-			const { id } = thirdPartyEmote.data;
-			const srcAnimated = buildSevenTvEmoteImageUrl(id);
-			const srcStatic = buildSevenTvEmoteImageUrl(id, { useStatic: true });
+			const { srcAnimated, srcStatic } = thirdPartyEmote.data;
 			parsedFragments.push({
 				type: 'emote',
 				text: part,
@@ -932,9 +930,8 @@ function buildEmoteFragment(emoteFragment) {
 		srcAnimated = buildFfzEmoteImageUrl(urls, animatedUrls);
 		srcStatic = buildFfzEmoteImageUrl(urls, animatedUrls, { useStatic: true });
 	} else if (thirdPartyEmote.type === 'seventv') {
-		const { id } = thirdPartyEmote.data;
-		srcAnimated = buildSevenTvEmoteImageUrl(id);
-		srcStatic = buildSevenTvEmoteImageUrl(id, { useStatic: true });
+		srcAnimated = thirdPartyEmote.data.srcAnimated;
+		srcStatic = thirdPartyEmote.data.srcStatic;
 	}
 
 	return buildParsedEmoteFragment({
@@ -1217,24 +1214,6 @@ function buildFfzEmoteImageUrl(
 
 	return url;
 }
-
-const BASE_SEVENTV_EMOTE_URL = 'https://cdn.7tv.app/emote';
-/**
- * Builds a 7TV emote image URL given the emote ID.
- *
- * @param {string} id - Emote ID
- * @param {Object} [options] - Format options
- * @param {boolean} [options.useStatic]
- * @param {'1x' | '2x' | '3x' | '4x'} [options.size]
- */
-function buildSevenTvEmoteImageUrl(
-	id,
-	{ useStatic = false, size = '4x' } = {},
-) {
-	const filename = `${size}${useStatic ? '_static' : ''}.webp`;
-	return [BASE_SEVENTV_EMOTE_URL, id, filename].join('/');
-}
-
 /**
  * Given the ID of an HTML template, returns a copy of its DocumentFragment
  * contents
