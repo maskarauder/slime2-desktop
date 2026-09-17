@@ -27,7 +27,7 @@ Here is what you need to run the app in development mode:
 ## YouTube live chat setup
 
 YouTube chat uses Google's installed-app OAuth flow and needs a Google Cloud
-Desktop app client ID for your fork:
+Desktop app client ID and client secret for your fork:
 
 1. Create or select a Google Cloud project and enable the
    [YouTube Data API v3](https://console.cloud.google.com/apis/library/youtube.googleapis.com).
@@ -35,8 +35,9 @@ Desktop app client ID for your fork:
    Google account that owns the YouTube channel as a test user.
 3. On the [Google Auth clients](https://console.cloud.google.com/auth/clients)
    page, create an OAuth client with application type **Desktop app**.
-4. In Slime2, add a **Read Account**, choose YouTube, paste the client ID, and
-   finish authorization in the system browser.
+4. In Slime2, add a **Read Account**, choose YouTube, paste the client ID and
+   client secret, and finish authorization in the system browser. The secret is
+   stored with the account tokens in the operating system credential store.
 5. Install or update the Slime2 Chat Box to version 1.6.0 or newer, then select
    the YouTube read account in its YouTube account slot (or make that account
    the default).

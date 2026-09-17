@@ -19,6 +19,7 @@ import { useState } from 'react';
 import type { AuthenticationContext, AuthenticationPages } from '.';
 import DialogCancelButton from '../DialogButton/DialogCancelButton';
 import DialogConfirmButton from '../DialogButton/DialogConfirmButton';
+import axios from "axios";
 
 const SERVICE: Account['service'] = 'youtube';
 
@@ -30,14 +31,22 @@ export default function YouTubeAuthPage() {
 	const { addAccount } = useAccountsDispatch();
 	const { settings, setSettings } = useSettings();
 	const [clientId, setClientId] = useState(settings.youtubeClientId);
+	const [clientSecret, setClientSecret] = useState('');
 	const [connecting, setConnecting] = useState(false);
 	const [errorMessage, setErrorMessage] = useState<string>();
 
 	async function connect() {
 		const normalizedClientId = clientId.trim();
+		const normalizedClientSecret = clientSecret.trim();
 		if (!normalizedClientId.endsWith('.apps.googleusercontent.com')) {
 			setErrorMessage(
 				'Enter a Google OAuth client ID for a Desktop app.',
+			);
+			return;
+		}
+		if (!normalizedClientSecret) {
+			setErrorMessage(
+				'Enter the client secret for the Desktop OAuth client.',
 			);
 			return;
 		}
@@ -51,6 +60,7 @@ export default function YouTubeAuthPage() {
 		setErrorMessage(undefined);
 		setSettings({ ...settings, youtubeClientId: normalizedClientId });
 
+		let authStage = 'opening Google authorization';
 		try {
 			const codeVerifier = randomUrlSafeString(64);
 			const codeChallenge = await sha256UrlSafe(codeVerifier);
@@ -61,8 +71,10 @@ export default function YouTubeAuthPage() {
 				state,
 				YOUTUBE_READ_SCOPE,
 			);
+			authStage = 'exchanging the authorization code';
 			const tokenResponse = await youtubeAuth.exchangeAuthorizationCode(
 				normalizedClientId,
+				normalizedClientSecret,
 				callback.code,
 				codeVerifier,
 				callback.redirectUri,
@@ -87,6 +99,7 @@ export default function YouTubeAuthPage() {
 				);
 			}
 
+			authStage = 'loading the YouTube channel';
 			const channelResponse =
 				await youtubeApi.getMyChannelWithAccessToken(access_token);
 			const channel = channelResponse.data.items?.[0];
@@ -99,8 +112,10 @@ export default function YouTubeAuthPage() {
 			const newAccountId = generateAccountId(SERVICE, type, channel.id);
 			const existingAccount =
 				accounts[newAccountId] ?? accounts[accountId];
+			authStage = 'saving the YouTube account';
 			await setTokens(newAccountId, access_token, refresh_token, {
 				clientId: normalizedClientId,
+				clientSecret: normalizedClientSecret,
 				expiresAt: Date.now() + expires_in * 1000,
 			});
 
@@ -127,12 +142,13 @@ export default function YouTubeAuthPage() {
 			setAccountId(newAccountId);
 			setPage('success');
 		} catch (error) {
-			console.error('YouTube authentication failed:', error);
+			const message = getErrorMessage(error)
+			console.error(
+				`YouTube authentication failed while ${authStage}: ${message}`,
+			)
 			setErrorMessage(
-				error instanceof Error
-					? error.message
-					: 'YouTube authentication failed. Please try again.',
-			);
+				`YouTube authentication failed while ${authStage}: ${message}`,
+			)
 		} finally {
 			setConnecting(false);
 		}
@@ -154,7 +170,10 @@ export default function YouTubeAuthPage() {
 						Create an OAuth client with application type “Desktop
 						app”.
 					</li>
-					<li>Paste its client ID below, then connect.</li>
+					<li>
+						Paste its client ID and client secret below, then
+						connect.
+					</li>
 				</ol>
 				<ExternalLink
 					href='https://console.cloud.google.com/auth/clients'
@@ -169,6 +188,17 @@ export default function YouTubeAuthPage() {
 				value={clientId}
 				onChange={setClientId}
 				placeholder='1234567890-abc.apps.googleusercontent.com'
+				onEnterKey={() => {
+					if (!connecting) connect();
+				}}
+			/>
+			<TextField
+				type='password'
+				label='Desktop OAuth Client Secret'
+				value={clientSecret}
+				onChange={setClientSecret}
+				placeholder='GOCSPX-…'
+				description='Stored with the account tokens in your operating system credential store.'
 				onEnterKey={() => {
 					if (!connecting) connect();
 				}}
@@ -189,7 +219,11 @@ export default function YouTubeAuthPage() {
 			<div className='mt-auto flex justify-end gap-4'>
 				<DialogCancelButton />
 				<DialogConfirmButton
-					disabled={connecting || clientId.trim().length === 0}
+					disabled={
+						connecting ||
+						clientId.trim().length === 0 ||
+						clientSecret.trim().length === 0
+					}
 					icon={<YoutubeSvg className='size-4.5' />}
 					onClick={connect}
 				>
@@ -198,6 +232,42 @@ export default function YouTubeAuthPage() {
 			</div>
 		</div>
 	);
+}
+
+type GoogleApiErrorResponse = {
+  error?: {
+    message?: string
+    status?: string
+    errors?: Array<{
+      message?: string
+      reason?: string
+    }>
+  }
+}
+
+function getErrorMessage(error: unknown): string {
+  if (axios.isAxiosError<GoogleApiErrorResponse>(error)) {
+    const googleError = error.response?.data?.error
+    const reason =
+      googleError?.errors?.[0]?.reason ??
+      googleError?.status
+
+    const message =
+      googleError?.message ??
+      error.message
+
+    return reason ? `${message} (${reason})` : message
+  }
+
+  if (error instanceof Error) {
+    return error.message
+  }
+
+  if (typeof error === "string") {
+    return error
+  }
+
+  return "An unknown error occurred."
 }
 
 function randomUrlSafeString(byteLength: number) {

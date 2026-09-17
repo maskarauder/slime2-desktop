@@ -23,20 +23,26 @@ export class YouTubeReauthorizationError extends Error {
 const youtubeAuth = {
 	async exchangeAuthorizationCode(
 		clientId: string,
+		clientSecret: string,
 		code: string,
 		codeVerifier: string,
 		redirectUri: string,
 	) {
 		return exchangeYouTubeOAuthCode(
 			clientId,
+			clientSecret,
 			code,
 			codeVerifier,
 			redirectUri,
 		);
 	},
 
-	async refreshAccessToken(clientId: string, refreshToken: string) {
-		return refreshYouTubeOAuthToken(clientId, refreshToken);
+	async refreshAccessToken(
+		clientId: string,
+		clientSecret: string,
+		refreshToken: string,
+	) {
+		return refreshYouTubeOAuthToken(clientId, clientSecret, refreshToken);
 	},
 
 	async getValidTokens(accountId: string): Promise<Tokens> {
@@ -51,15 +57,16 @@ const youtubeAuth = {
 				return tokens;
 			}
 
-			if (!tokens.clientId) {
+			if (!tokens.clientId || !tokens.clientSecret) {
 				throw new YouTubeReauthorizationError(
-					'This YouTube account predates desktop OAuth support and must be reconnected.',
+					'This YouTube account is missing its Desktop OAuth credentials and must be reconnected.',
 				);
 			}
 
 			try {
 				const response = await youtubeAuth.refreshAccessToken(
 					tokens.clientId,
+					tokens.clientSecret,
 					tokens.refreshToken,
 				);
 				const { access_token, expires_in, refresh_token } = response;
@@ -70,6 +77,7 @@ const youtubeAuth = {
 					refresh_token ?? tokens.refreshToken,
 					{
 						clientId: tokens.clientId,
+						clientSecret: tokens.clientSecret,
 						expiresAt: Date.now() + expires_in * 1000,
 					},
 				);

@@ -169,12 +169,14 @@ export type GoogleTokenResponse = {
 
 export async function exchangeYouTubeOAuthCode(
 	clientId: string,
+	clientSecret: string,
 	code: string,
 	codeVerifier: string,
 	redirectUri: string,
 ): Promise<GoogleTokenResponse> {
 	return invoke('exchange_youtube_oauth_code', {
 		clientId,
+		clientSecret,
 		code,
 		codeVerifier,
 		redirectUri,
@@ -183,7 +185,12 @@ export async function exchangeYouTubeOAuthCode(
 
 export async function refreshYouTubeOAuthToken(
 	clientId: string,
+	clientSecret: string,
 	refreshToken: string,
 ): Promise<GoogleTokenResponse> {
-	return invoke('refresh_youtube_oauth_token', { clientId, refreshToken });
+	return invoke('refresh_youtube_oauth_token', {
+		clientId,
+		clientSecret,
+		refreshToken,
+	});
 }

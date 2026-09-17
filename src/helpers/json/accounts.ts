@@ -45,7 +45,7 @@ export async function setTokens(
 	accountId: string,
 	accessToken: string,
 	refreshToken: string,
-	metadata: Pick<Tokens, 'clientId' | 'expiresAt'> = {},
+	metadata: Pick<Tokens, 'clientId' | 'clientSecret' | 'expiresAt'> = {},
 ): Promise<Tokens> {
 	const tokens: Tokens = {
 		accessToken,
@@ -120,6 +120,7 @@ const Tokens = z.object({
 	refreshToken: z.string(),
 	validatedAt: z.number(),
 	clientId: z.optional(z.string()),
+	clientSecret: z.optional(z.string()),
 	expiresAt: z.optional(z.number()),
 });
 export type Tokens = z.infer<typeof Tokens>;

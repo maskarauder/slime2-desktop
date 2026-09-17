@@ -841,12 +841,14 @@ pub async fn start_youtube_oauth(
 #[tauri::command]
 pub async fn exchange_youtube_oauth_code(
 	client_id: String,
+	client_secret: String,
 	code: String,
 	code_verifier: String,
 	redirect_uri: String,
 ) -> Result<GoogleTokenResponse, String> {
 	request_google_tokens(&[
 		("client_id", client_id),
+		("client_secret", client_secret),
 		("code", code),
 		("code_verifier", code_verifier),
 		("grant_type", "authorization_code".to_string()),
@@ -858,10 +860,12 @@ pub async fn exchange_youtube_oauth_code(
 #[tauri::command]
 pub async fn refresh_youtube_oauth_token(
 	client_id: String,
+	client_secret: String,
 	refresh_token: String,
 ) -> Result<GoogleTokenResponse, String> {
 	request_google_tokens(&[
 		("client_id", client_id),
+		("client_secret", client_secret),
 		("refresh_token", refresh_token),
 		("grant_type", "refresh_token".to_string()),
 	])
