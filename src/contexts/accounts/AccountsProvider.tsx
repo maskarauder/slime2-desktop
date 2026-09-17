@@ -7,6 +7,7 @@ import {
 import twitchApi from '@/helpers/services/twitch/twitchApi';
 import youtubeApi from '@/helpers/services/youtube/youtubeApi';
 import { YouTubeReauthorizationError } from '@/helpers/services/youtube/youtubeAuth';
+import { getYouTubeErrorDetails } from '@/helpers/services/youtube/youtubeError';
 import axios from 'axios';
 import { useEffect, useReducer } from 'react';
 import { AccountsContext } from './useAccounts';
@@ -100,7 +101,9 @@ export default function AccountsProvider({ children }: Props.WithChildren) {
 				} catch (error) {
 					console.error(
 						`Unable to update ${account.service} account:`,
-						error,
+						account.service === 'youtube'
+							? getYouTubeErrorDetails(error)
+							: error,
 					);
 					if (
 						account.service === 'youtube' &&

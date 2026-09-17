@@ -15,11 +15,11 @@ import {
 import youtubeApi from '@/helpers/services/youtube/youtubeApi';
 import youtubeAuth from '@/helpers/services/youtube/youtubeAuth';
 import { YOUTUBE_READ_SCOPE } from '@/helpers/services/youtube/youtubeConstants';
+import { getYouTubeErrorDetails } from '@/helpers/services/youtube/youtubeError';
 import { useState } from 'react';
 import type { AuthenticationContext, AuthenticationPages } from '.';
 import DialogCancelButton from '../DialogButton/DialogCancelButton';
 import DialogConfirmButton from '../DialogButton/DialogConfirmButton';
-import axios from "axios";
 
 const SERVICE: Account['service'] = 'youtube';
 
@@ -142,13 +142,14 @@ export default function YouTubeAuthPage() {
 			setAccountId(newAccountId);
 			setPage('success');
 		} catch (error) {
-			const message = getErrorMessage(error)
+			const details = getYouTubeErrorDetails(error);
 			console.error(
-				`YouTube authentication failed while ${authStage}: ${message}`,
-			)
+				`YouTube authentication failed while ${authStage}:`,
+				details,
+			);
 			setErrorMessage(
-				`YouTube authentication failed while ${authStage}: ${message}`,
-			)
+				`YouTube authentication failed while ${authStage}: ${details.message}`,
+			);
 		} finally {
 			setConnecting(false);
 		}
@@ -232,42 +233,6 @@ export default function YouTubeAuthPage() {
 			</div>
 		</div>
 	);
-}
-
-type GoogleApiErrorResponse = {
-  error?: {
-    message?: string
-    status?: string
-    errors?: Array<{
-      message?: string
-      reason?: string
-    }>
-  }
-}
-
-function getErrorMessage(error: unknown): string {
-  if (axios.isAxiosError<GoogleApiErrorResponse>(error)) {
-    const googleError = error.response?.data?.error
-    const reason =
-      googleError?.errors?.[0]?.reason ??
-      googleError?.status
-
-    const message =
-      googleError?.message ??
-      error.message
-
-    return reason ? `${message} (${reason})` : message
-  }
-
-  if (error instanceof Error) {
-    return error.message
-  }
-
-  if (typeof error === "string") {
-    return error
-  }
-
-  return "An unknown error occurred."
 }
 
 function randomUrlSafeString(byteLength: number) {

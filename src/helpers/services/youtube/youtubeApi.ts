@@ -40,11 +40,10 @@ const youtubeApi = {
 			{
 				signal,
 				params: {
-					mine: true,
 					part: 'id,snippet,status',
 					broadcastStatus: 'active',
 					broadcastType: 'all',
-					maxResults: 1,
+					maxResults: 50,
 				},
 			},
 		);

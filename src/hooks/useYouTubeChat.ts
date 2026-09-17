@@ -4,6 +4,7 @@ import useWidgetMetas from '@/contexts/widget_metas/useWidgetMetas';
 import { deleteTokens, type Account } from '@/helpers/json/accounts';
 import youtubeApi from '@/helpers/services/youtube/youtubeApi';
 import { YouTubeReauthorizationError } from '@/helpers/services/youtube/youtubeAuth';
+import { getYouTubeErrorDetails } from '@/helpers/services/youtube/youtubeError';
 import type { YouTubeLiveChatMessage } from '@/helpers/services/youtube/youtubeTypes';
 import { sendYouTubeEvent } from '@/helpers/widgetMessage';
 import axios from 'axios';
@@ -12,10 +13,13 @@ import { useEffect, useRef } from 'react';
 const BROADCAST_RETRY_DELAY = 60 * 1000;
 const ERROR_RETRY_DELAY = 15 * 1000;
 const DEFAULT_POLLING_INTERVAL = 5 * 1000;
+const MAX_SEEN_MESSAGE_IDS = 5_000;
 
 type YouTubeSession = {
 	abortController: AbortController;
 	seenMessageIds: Set<string>;
+	activeBroadcastId?: string;
+	waitingForBroadcastLogged: boolean;
 };
 
 export default function useYouTubeChat() {
@@ -72,18 +76,33 @@ export default function useYouTubeChat() {
 					accountId,
 					signal,
 				);
-				const broadcast = broadcastResponse.data.items?.[0];
+				const broadcast = broadcastResponse.data.items?.find(
+					broadcast =>
+						broadcast.status?.lifeCycleStatus === 'live' &&
+						Boolean(broadcast.snippet.liveChatId),
+				);
 				const liveChatId = broadcast?.snippet.liveChatId;
 
 				if (!liveChatId) {
+					if (!session.waitingForBroadcastLogged) {
+						console.info(
+							`No active YouTube broadcast with live chat was found for ${accountsRef.current[accountId]?.displayName ?? accountId}. Retrying in one minute.`,
+						);
+						session.waitingForBroadcastLogged = true;
+					}
 					await abortableDelay(BROADCAST_RETRY_DELAY, signal);
 					continue;
 				}
 
-				console.info(
-					`Reading YouTube chat for ${accountsRef.current[accountId]?.displayName ?? accountId}:`,
-					broadcast.snippet.title,
-				);
+				session.waitingForBroadcastLogged = false;
+				if (session.activeBroadcastId !== broadcast.id) {
+					session.activeBroadcastId = broadcast.id;
+					session.seenMessageIds.clear();
+					console.info(
+						`Reading YouTube chat for ${accountsRef.current[accountId]?.displayName ?? accountId}:`,
+						broadcast.snippet.title,
+					);
+				}
 				let pageToken: string | undefined;
 
 				while (!signal.aborted) {
@@ -103,10 +122,9 @@ export default function useYouTubeChat() {
 					for (const message of items) {
 						if (
 							!message.id ||
-							session.seenMessageIds.has(message.id)
+							!rememberMessage(session, message.id)
 						)
 							continue;
-						session.seenMessageIds.add(message.id);
 						await dispatchMessage(accountId, message);
 					}
 
@@ -135,7 +153,10 @@ export default function useYouTubeChat() {
 					return;
 				}
 
-				console.error('YouTube live chat connection error:', error);
+				console.error(
+					'YouTube live chat connection error:',
+					getYouTubeErrorDetails(error),
+				);
 				await abortableDelay(retryDelayFor(error), signal);
 			}
 		}
@@ -169,6 +190,7 @@ export default function useYouTubeChat() {
 			const session: YouTubeSession = {
 				abortController: new AbortController(),
 				seenMessageIds: new Set(),
+				waitingForBroadcastLogged: false,
 			};
 			sessions.current.set(accountId, session);
 			consumeYouTubeChat(accountId, session).finally(() => {
@@ -224,8 +246,9 @@ function relatedWidgetIds(
 function retryDelayFor(error: unknown) {
 	if (axios.isAxiosError(error)) {
 		const reason = error.response?.data?.error?.errors?.[0]?.reason;
+		const status = error.response?.status;
 		if (
-			error.response?.status === 403 ||
+			(status !== undefined && status >= 400 && status < 500) ||
 			reason === 'liveChatEnded' ||
 			reason === 'liveChatNotFound'
 		) {
@@ -234,6 +257,20 @@ function retryDelayFor(error: unknown) {
 	}
 
 	return ERROR_RETRY_DELAY;
+}
+
+function rememberMessage(session: YouTubeSession, messageId: string) {
+	if (session.seenMessageIds.has(messageId)) return false;
+
+	session.seenMessageIds.add(messageId);
+	if (session.seenMessageIds.size > MAX_SEEN_MESSAGE_IDS) {
+		const oldestMessageId = session.seenMessageIds.values().next().value;
+		if (oldestMessageId !== undefined) {
+			session.seenMessageIds.delete(oldestMessageId);
+		}
+	}
+
+	return true;
 }
 
 function abortableDelay(milliseconds: number, signal: AbortSignal) {
