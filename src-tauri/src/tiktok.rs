@@ -5,10 +5,10 @@ use tauri::{AppHandle, Emitter};
 use tokio::{
 	sync::Mutex,
 	task::JoinHandle,
-	time::{Duration, sleep},
+	time::{Duration, sleep, timeout},
 };
 use tokio_tungstenite::{
-	connect_async,
+	connect_async, WebSocketStream,
 	tungstenite::{Error as WebSocketError, Message},
 };
 use url::Url;
@@ -16,6 +16,10 @@ use url::Url;
 const EULER_STREAM_WEBSOCKET_URL: &str = "wss://ws.eulerstream.com";
 const OFFLINE_RETRY_DELAY: Duration = Duration::from_secs(60);
 const ERROR_RETRY_DELAY: Duration = Duration::from_secs(15);
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
+const IDLE_PROBE_DELAY: Duration = Duration::from_secs(30);
+const PROBE_TIMEOUT: Duration = Duration::from_secs(15);
+const WRITE_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Default)]
 pub struct TikTokConnections {
@@ -93,7 +97,26 @@ async fn consume_live_chat(
 			None,
 		);
 
-		let (mut websocket, _) = match connect_async(websocket_url.as_str()).await {
+		let connection = match timeout(
+			CONNECT_TIMEOUT,
+			connect_async(websocket_url.as_str()),
+		)
+		.await
+		{
+			Ok(result) => result,
+			Err(_) => {
+				emit_status(
+					&app_handle,
+					&account_id,
+					"reconnecting",
+					None,
+					Some("Euler Stream connection timed out after 30 seconds.".to_string()),
+				);
+				sleep(ERROR_RETRY_DELAY).await;
+				continue;
+			}
+		};
+		let (mut websocket, _) = match connection {
 			Ok(connection) => connection,
 			Err(error) => {
 				let status = websocket_error_status(&error);
@@ -134,26 +157,44 @@ async fn consume_live_chat(
 		let mut close_code = None;
 		let mut close_reason = None;
 
-		while let Some(result) = websocket.next().await {
-			match result {
-				Ok(Message::Text(message)) => {
+		loop {
+			let message = match read_live_message(
+				&mut websocket,
+				IDLE_PROBE_DELAY,
+				PROBE_TIMEOUT,
+			)
+			.await
+			{
+				Ok(Some(message)) => message,
+				Ok(None) => break,
+				Err(reason) => {
+					close_reason = Some(reason.to_string());
+					break;
+				}
+			};
+			match message {
+				Message::Text(message) => {
 					emit_message(
 						&app_handle,
 						&account_id,
 						message.to_string(),
 					);
 				}
-				Ok(Message::Binary(message)) => {
+				Message::Binary(message) => {
 					if let Ok(message) = String::from_utf8(message.to_vec()) {
 						emit_message(&app_handle, &account_id, message);
 					}
 				}
-				Ok(Message::Ping(payload)) => {
-					if websocket.send(Message::Pong(payload)).await.is_err() {
+				Message::Ping(payload) => {
+					if !matches!(
+						timeout(WRITE_TIMEOUT, websocket.send(Message::Pong(payload))).await,
+						Ok(Ok(())),
+					) {
+						close_reason = Some("Unable to send the Euler Stream heartbeat reply.".to_string());
 						break;
 					}
 				}
-				Ok(Message::Close(frame)) => {
+				Message::Close(frame) => {
 					if let Some(frame) = frame {
 						close_code = Some(u16::from(frame.code));
 						if !frame.reason.is_empty() {
@@ -162,10 +203,11 @@ async fn consume_live_chat(
 					}
 					break;
 				}
-				Ok(_) => {}
-				Err(_) => break,
+				_ => {}
 			}
 		}
+		// Dispose of the old transport before waiting and opening another one.
+		drop(websocket);
 
 		match close_code {
 			Some(4401 | 4403) => {
@@ -195,7 +237,7 @@ async fn consume_live_chat(
 				);
 				return;
 			}
-			Some(4005 | 4404) => {
+			Some(4005 | 4006 | 4404) => {
 				emit_status(
 					&app_handle,
 					&account_id,
@@ -217,6 +259,39 @@ async fn consume_live_chat(
 			}
 		}
 	}
+}
+
+// Quiet chat is normal. Probe the WebSocket after a period with no frames,
+// then reconnect only if the peer also fails to answer the protocol ping.
+// Any received frame confirms the inbound transport is still working.
+async fn read_live_message<S>(
+	websocket: &mut WebSocketStream<S>,
+	idle_delay: Duration,
+	probe_timeout: Duration,
+) -> Result<Option<Message>, &'static str>
+where
+	S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+{
+	let result = match timeout(idle_delay, websocket.next()).await {
+		Ok(result) => result,
+		Err(_) => {
+			if !matches!(
+				timeout(
+					WRITE_TIMEOUT,
+					websocket.send(Message::Ping(Vec::<u8>::new().into())),
+				)
+				.await,
+				Ok(Ok(())),
+			) {
+				return Err("Unable to send an Euler Stream heartbeat probe.");
+			}
+			timeout(probe_timeout, websocket.next()).await
+				.map_err(|_| "Euler Stream heartbeat timed out; reconnecting.")?
+		}
+	};
+	result
+		.transpose()
+		.map_err(|_| "Euler Stream transport failed; reconnecting.")
 }
 
 fn build_websocket_url(unique_id: &str, api_key: &str) -> Result<Url, String> {

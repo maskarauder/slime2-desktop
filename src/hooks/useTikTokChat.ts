@@ -140,7 +140,17 @@ export default function useTikTokChat() {
 						return;
 					}
 
-					if (state === 'error') {
+					if (state === 'connected') {
+						console.info(
+							`TikTok LIVE connected for ${accountsRef.current[accountId]?.displayName ?? accountId}.`,
+						);
+					} else if (state === 'reconnecting') {
+						console.warn(
+							`TikTok LIVE reconnecting${code ? ` (${code})` : ''}:`,
+							message ??
+								'Connection closed; retrying in 15 seconds.',
+						);
+					} else if (state === 'error') {
 						console.error(
 							`TikTok LIVE connection stopped${code ? ` (${code})` : ''}:`,
 							message ?? 'Unknown connection error.',

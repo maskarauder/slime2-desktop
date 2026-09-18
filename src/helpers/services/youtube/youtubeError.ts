@@ -42,12 +42,38 @@ export function getYouTubeErrorDetails(error: unknown): YouTubeErrorDetails {
 	}
 
 	if (error instanceof Error) {
-		return { message: error.message };
+		return (
+			parseGoogleOAuthError(error.message) ?? { message: error.message }
+		);
 	}
 
 	if (typeof error === 'string') {
-		return { message: error };
+		return parseGoogleOAuthError(error) ?? { message: error };
 	}
 
 	return { message: 'An unknown error occurred.' };
+}
+
+function parseGoogleOAuthError(value: string): YouTubeErrorDetails | undefined {
+	// Rust token requests send a deliberately small JSON error, never the
+	// request, OAuth credentials, token response, or arbitrary HTTP body.
+	try {
+		const details = JSON.parse(value);
+		if (
+			details?.source !== 'google-oauth' ||
+			typeof details.message !== 'string'
+		) {
+			return undefined;
+		}
+		return {
+			message: details.message,
+			...(typeof details.code === 'string' ? { code: details.code } : {}),
+			...(Number.isInteger(details.status)
+				? { status: details.status }
+				: {}),
+		};
+	} catch {
+		// Older builds and network failures return plain strings.
+		return undefined;
+	}
 }

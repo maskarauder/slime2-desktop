@@ -900,6 +900,7 @@ async fn request_google_tokens(
 	};
 	let response = reqwest::Client::new()
 		.post("https://oauth2.googleapis.com/token")
+		.timeout(Duration::from_secs(30))
 		.header("Content-Type", "application/x-www-form-urlencoded")
 		.body(request_body)
 		.send()
@@ -912,15 +913,28 @@ async fn request_google_tokens(
 		.map_err(|error| format!("Unable to read the Google OAuth response: {error}"))?;
 
 	if !status.is_success() {
-		let description = serde_json::from_str::<serde_json::Value>(&response_body)
+		let code = serde_json::from_str::<serde_json::Value>(&response_body)
 			.ok()
 			.and_then(|body| {
-				body.get("error_description")
+				body.get("error")
 					.and_then(|value| value.as_str())
+						.filter(|value| {
+							value.len() <= 64
+								&& value
+									.chars()
+									.all(|c| c.is_ascii_lowercase() || c == '_')
+						})
 					.map(str::to_string)
 			})
-			.unwrap_or_else(|| format!("Google returned HTTP {status}."));
-		return Err(description);
+			.unwrap_or_else(|| "unknown_error".to_string());
+		return Err(serde_json::json!({
+			"source": "google-oauth",
+			"status": status.as_u16(),
+				"message": format!(
+					"Google OAuth token request failed: {code} (HTTP {status})."
+				),
+			"code": code,
+		}).to_string());
 	}
 
 	serde_json::from_str(&response_body)

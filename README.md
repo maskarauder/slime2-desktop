@@ -45,6 +45,27 @@ Desktop app client ID and client secret for your fork:
 The current integration reads the authenticated channel's active live chat. It
 does not send YouTube chat messages.
 
+## Live-chat recovery
+
+The chat readers continue polling while a chat is quiet. YouTube requests have
+a 30-second deadline; a temporary network failure retries with backoff while
+keeping the current live-chat page token. Saved YouTube credentials are kept
+when a refresh attempt times out or Google returns a temporary server, rate
+limit, or network error. The account is marked for reconnection only when
+Google rejects the credentials themselves, such as `invalid_grant` or
+`invalid_client`.
+
+TikTok LIVE connections have a 30-second connection deadline. After 30 seconds
+without a WebSocket frame, Slime2 sends a protocol ping and waits 15 seconds
+for a response. A dead connection is closed and retried; normal quiet chat is
+left connected. Euler Stream's offline and no-message close codes are logged
+as reconnectable status events.
+
+The recovery code logs the account name, retry delay, safe HTTP status/reason,
+and recovery event. It never logs OAuth headers, access tokens, refresh tokens,
+or API keys. Rebuild Slime2 after applying the patch; existing account and
+widget settings do not need to be recreated.
+
 ## Experimental TikTok LIVE chat setup
 
 TikTok does not provide an official public API for reading LIVE chat. This fork
