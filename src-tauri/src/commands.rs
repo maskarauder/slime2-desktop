@@ -58,6 +58,19 @@ pub async fn save_json(
 }
 
 #[tauri::command]
+pub async fn save_json_atomic(
+	json_string: String,
+	file_path: String,
+) -> Result<(), String> {
+	tauri::async_runtime::spawn_blocking(move || {
+		file::save_json_atomic(&json_string, PathBuf::from(file_path))
+	})
+	.await
+	.map_err(|error| error.to_string())?
+	.map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 pub async fn send_websocket_message(
 	message: &str,
 	channel: &str,

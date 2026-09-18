@@ -3,7 +3,7 @@ use serde_json::Number;
 use std::{
 	collections::HashMap,
 	fs::{self, File},
-	io,
+	io::{self, Write},
 	path::{Path, PathBuf},
 	time::{SystemTime, UNIX_EPOCH},
 };
@@ -38,6 +38,30 @@ pub fn save_json(json_string: &str, mut file_path: PathBuf) -> io::Result<()> {
 	fs::write(file_path, json_string)?;
 
 	Ok(())
+}
+
+// Write in the same directory, flush, then replace the destination. A failed
+// write leaves the last complete file in place. Callers serialize by path.
+pub fn save_json_atomic(
+	json_string: &str,
+	mut file_path: PathBuf,
+) -> io::Result<()> {
+	file_path.set_extension("json");
+	if let Some(parent) = file_path.parent() {
+		fs::create_dir_all(parent)?;
+	}
+	let temp_path = file_path.with_extension("json.tmp");
+	let result = (|| -> io::Result<()> {
+		let mut file = File::create(&temp_path)?;
+		file.write_all(json_string.as_bytes())?;
+		file.sync_all()?;
+		drop(file);
+		fs::rename(&temp_path, &file_path)
+	})();
+	if result.is_err() {
+		let _ = fs::remove_file(&temp_path);
+	}
+	result
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]

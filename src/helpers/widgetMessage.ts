@@ -163,6 +163,15 @@ export async function sendLogEvents(widgetId: string, logEvents: boolean) {
 	return sendWidgetMessage(widgetId, 'log-events', { logEvents });
 }
 
+export async function sendSharedWidgetStorageChange(
+	widgetId: string,
+	data: Record<string, unknown>,
+) {
+	return sendWidgetMessage(widgetId, 'shared-widget-storage-change', data, {
+		dispatchToBot: true,
+	});
+}
+
 async function sendWidgetMessage(
 	widgetId: string,
 	type: string,

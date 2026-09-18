@@ -66,6 +66,17 @@ export async function saveJson(
 	return invoke('save_json', { jsonString, filePath });
 }
 
+// Callers must serialize writes for a path and await completion.
+export async function saveJsonAtomic(
+	jsonObject: unknown,
+	filePath: string,
+): Promise<void> {
+	return invoke('save_json_atomic', {
+		jsonString: JSON.stringify(jsonObject),
+		filePath,
+	});
+}
+
 export async function createWidgetFolder(
 	folderName?: string,
 	color?: string,

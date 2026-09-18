@@ -115,6 +115,7 @@ export default function useTwitchBot() {
 			'widget-accounts',
 			'widget-button-click',
 			'widget-response',
+			'shared-widget-storage-change',
 		];
 
 		// directly passing the above events into the bots

@@ -4,8 +4,8 @@ import bttvApi from '@/helpers/services/emotes/betterTTV';
 import ffzApi from '@/helpers/services/emotes/frankerFaceZ';
 import sevenTvApi from '@/helpers/services/emotes/sevenTV';
 import { getYouTubeGlobalEmotes } from '@/helpers/services/emotes/YouTube';
-import { getPronouns } from '@/helpers/services/pronouns';
 import { getSystemProxiedMessage } from '@/helpers/services/pluralmind';
+import { getPronouns } from '@/helpers/services/pronouns';
 import twitchApi from '@/helpers/services/twitch/twitchApi';
 import { getTwitchFollowDate } from '@/helpers/services/twitch/twitchFollowDate';
 import { capitalizeWord } from '@/helpers/string';
@@ -13,6 +13,13 @@ import { sendWidgetResponse, sendWidgetValues } from '@/helpers/widgetMessage';
 import logZodError from '@/helpers/zodError';
 import type { Account } from '@@/json/accounts';
 import { loadWidgetSettings } from '@@/json/widgetSettings';
+import {
+	broadcastSharedWidgetStorageChange,
+	deleteSharedWidgetStorage,
+	forgetSharedWidgetStorageSubscriber,
+	getSharedWidgetStorage,
+	setSharedWidgetStorage,
+} from '@@/json/widgetSharedStorage';
 import {
 	loadWidgetValues,
 	saveWidgetValues,
@@ -72,13 +79,28 @@ export default function useWidgetRequest() {
 	}, []);
 
 	useEffect(() => {
+		function forgetSubscriber(
+			event: CustomEventInit<{ widgetId: string }>,
+		) {
+			if (event.detail?.widgetId)
+				forgetSharedWidgetStorageSubscriber(event.detail.widgetId);
+		}
+		addEventListener('widget-delete', forgetSubscriber);
+		addEventListener('widget-core-change', forgetSubscriber);
+		return () => {
+			removeEventListener('widget-delete', forgetSubscriber);
+			removeEventListener('widget-core-change', forgetSubscriber);
+		};
+	}, []);
+
+	useEffect(() => {
 		async function requestListener(event: CustomEventInit<WidgetRequest>) {
 			try {
 				const request = WidgetRequestZ.parse(event.detail);
 				const { widget_id, request_id, request_type } = request;
 
 				async function respond(response: unknown) {
-					sendWidgetResponse(
+					return sendWidgetResponse(
 						widget_id,
 						request_type,
 						request_id,
@@ -117,6 +139,44 @@ export default function useWidgetRequest() {
 				}
 
 				switch (request.request_type) {
+					case 'get-shared-widget-storage': {
+						const { scope, key } = request.payload;
+						await respond(
+							await getSharedWidgetStorage(widget_id, scope, key),
+						);
+						break;
+					}
+					case 'set-shared-widget-storage': {
+						const { scope, key, value_json, mode, operation_id } =
+							request.payload;
+						const result = await setSharedWidgetStorage(
+							widget_id,
+							scope,
+							key,
+							value_json,
+							mode,
+							operation_id,
+						);
+						await Promise.all([
+							respond(result),
+							broadcastSharedWidgetStorageChange(result),
+						]);
+						break;
+					}
+					case 'delete-shared-widget-storage': {
+						const { scope, key, operation_id } = request.payload;
+						const result = await deleteSharedWidgetStorage(
+							widget_id,
+							scope,
+							key,
+							operation_id,
+						);
+						await Promise.all([
+							respond(result),
+							broadcastSharedWidgetStorageChange(result),
+						]);
+						break;
+					}
 					case 'get-youtube-global-emotes': {
 						const { account_id } = request.payload;
 						getValidAccount(account_id, {
@@ -404,6 +464,36 @@ const YouTubeGlobalEmotesRequestZ = z.object({
 	}),
 });
 
+const SharedWidgetStorageScopeZ = z.literal(['persistent', 'session']);
+
+const GetSharedWidgetStorageRequestZ = z.object({
+	request_type: z.literal('get-shared-widget-storage'),
+	payload: z.object({
+		scope: SharedWidgetStorageScopeZ,
+		key: z.string(),
+	}),
+});
+
+const SetSharedWidgetStorageRequestZ = z.object({
+	request_type: z.literal('set-shared-widget-storage'),
+	payload: z.object({
+		scope: SharedWidgetStorageScopeZ,
+		key: z.string(),
+		value_json: z.string(),
+		mode: z.literal(['set', 'set-if-absent']),
+		operation_id: z.optional(z.string()),
+	}),
+});
+
+const DeleteSharedWidgetStorageRequestZ = z.object({
+	request_type: z.literal('delete-shared-widget-storage'),
+	payload: z.object({
+		scope: SharedWidgetStorageScopeZ,
+		key: z.string(),
+		operation_id: z.optional(z.string()),
+	}),
+});
+
 const AccountRequestZ = z.object({
 	request_type: z.literal([
 		'get-twitch-cheermotes',
@@ -444,6 +534,9 @@ const WidgetRequestZ = z.intersection(
 		widget_id: z.string(),
 	}),
 	z.discriminatedUnion('request_type', [
+		GetSharedWidgetStorageRequestZ,
+		SetSharedWidgetStorageRequestZ,
+		DeleteSharedWidgetStorageRequestZ,
 		YouTubeGlobalEmotesRequestZ,
 		PronounsRequestZ,
 		SystemProxiedMessageRequestZ,

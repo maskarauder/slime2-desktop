@@ -41,24 +41,33 @@ export default function useSlime2Websocket() {
 
 		async function waitForWebsocketOpen() {
 			return new Promise<void>((resolve, reject) => {
-				if (websocket.readyState !== websocket.OPEN) {
-					websocket.addEventListener(
-						'open',
-						() => {
-							resolve();
-						},
-						{ once: true },
-					);
-					websocket.addEventListener(
-						'close',
-						() => {
-							reject('Websocket closed while waiting for request');
-						},
-						{ once: true },
-					);
-				} else {
+				if (websocket.readyState === WebSocket.OPEN) {
+					resolve();
+					return;
+				}
+				if (websocket.readyState !== WebSocket.CONNECTING) {
+					reject(new Error('Slime2 is disconnected.'));
+					return;
+				}
+				function cleanup() {
+					clearTimeout(timer);
+					websocket.removeEventListener('open', onOpen);
+					websocket.removeEventListener('close', onClose);
+				}
+				function onOpen() {
+					cleanup();
 					resolve();
 				}
+				function onClose() {
+					cleanup();
+					reject(new Error('Slime2 disconnected before the request.'));
+				}
+				const timer = setTimeout(() => {
+					cleanup();
+					reject(new Error('Timed out connecting to Slime2.'));
+				}, 10000);
+				websocket.addEventListener('open', onOpen);
+				websocket.addEventListener('close', onClose);
 			});
 		}
 
@@ -84,13 +93,29 @@ export default function useSlime2Websocket() {
 
 			const requestId = `${requestType}_${nanoid()}_${Date.now()}`;
 
-			return new Promise(async (resolve, reject) => {
-				try {
-					await waitForWebsocketOpen();
-				} catch {
-					resolve(null);
+			await waitForWebsocketOpen();
+			if (requestMapRef.current.size >= 1000) {
+				throw new Error('Too many pending Slime2 widget requests.');
+			}
+			return new Promise((resolve, reject) => {
+				function cleanup() {
+					clearTimeout(timer);
+					requestMapRef.current.delete(requestId);
 				}
-				requestMapRef.current.set(requestId, [resolve, reject]);
+				const timer = setTimeout(() => {
+					cleanup();
+					reject(new Error(`Slime2 request timed out: ${requestType}`));
+				}, 30000);
+				requestMapRef.current.set(requestId, [
+					value => {
+						cleanup();
+						resolve(value);
+					},
+					error => {
+						cleanup();
+						reject(error);
+					},
+				]);
 				const message = JSON.stringify({
 					type: 'request',
 					data: {
@@ -100,7 +125,12 @@ export default function useSlime2Websocket() {
 						payload,
 					},
 				});
-				websocket.send(message);
+				try {
+					websocket.send(message);
+				} catch (error) {
+					cleanup();
+					reject(error);
+				}
 			});
 		};
 
@@ -190,8 +220,12 @@ export default function useSlime2Websocket() {
 			websocket.close();
 		};
 
-		websocket.onclose = () => {
-			reconnect();
+		websocket.onclose = event => {
+			for (const [, reject] of requestMapRef.current.values()) {
+				reject(new Error('Slime2 disconnected during the request.'));
+			}
+			requestMapRef.current.clear();
+			if (event.code !== 3000) reconnect();
 		};
 	}, [widgetId]);
 

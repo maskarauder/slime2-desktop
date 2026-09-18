@@ -228,6 +228,7 @@ async fn main() {
 			commands::extract_widget_details,
 			commands::load_json,
 			commands::save_json,
+			commands::save_json_atomic,
 			commands::create_widget_folder,
 			commands::temp_copy,
 			commands::save_temp_tile_icon,
