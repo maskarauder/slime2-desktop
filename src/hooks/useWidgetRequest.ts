@@ -256,6 +256,24 @@ export default function useWidgetRequest() {
 						respond(sevenTv);
 						break;
 					}
+					case 'post-slime2-log': {
+						const { level, message } = request.payload;
+						const formattedMessage = `[Widget ${widget_id}] ${message.slice(0, 4000)}`;
+
+						switch (level) {
+							case 'error':
+								console.error(formattedMessage);
+								break;
+							case 'warn':
+								console.warn(formattedMessage);
+								break;
+							default:
+								console.info(formattedMessage);
+						}
+
+						respond({ success: true });
+						break;
+					}
 					case 'post-slime2-values': {
 						const sentValues = request.payload;
 
@@ -395,6 +413,14 @@ const ValuesRequestZ = z.object({
 	payload: WidgetValuesZ,
 });
 
+const WidgetLogRequestZ = z.object({
+	request_type: z.literal('post-slime2-log'),
+	payload: z.object({
+		level: z.literal(['info', 'warn', 'error']),
+		message: z.string(),
+	}),
+});
+
 const WidgetRequestZ = z.intersection(
 	z.object({
 		request_id: z.string(),
@@ -408,6 +434,7 @@ const WidgetRequestZ = z.intersection(
 		ThirdPartyPlatformRequestZ,
 		SevenTvRequestZ,
 		ChatMessageRequestZ,
+		WidgetLogRequestZ,
 		ValuesRequestZ,
 	]),
 );
