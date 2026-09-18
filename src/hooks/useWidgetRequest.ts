@@ -3,6 +3,7 @@ import { useBotsLogDispatch } from '@/contexts/bot_logs/useBotLogsDispatch';
 import bttvApi from '@/helpers/services/emotes/betterTTV';
 import ffzApi from '@/helpers/services/emotes/frankerFaceZ';
 import sevenTvApi from '@/helpers/services/emotes/sevenTV';
+import { getYouTubeGlobalEmotes } from '@/helpers/services/emotes/YouTube';
 import { getPronouns } from '@/helpers/services/pronouns';
 import { getSystemProxiedMessage } from '@/helpers/services/pluralmind';
 import twitchApi from '@/helpers/services/twitch/twitchApi';
@@ -116,6 +117,15 @@ export default function useWidgetRequest() {
 				}
 
 				switch (request.request_type) {
+					case 'get-youtube-global-emotes': {
+						const { account_id } = request.payload;
+						getValidAccount(account_id, {
+							service: 'youtube',
+							type: 'read',
+						});
+						respond(getYouTubeGlobalEmotes());
+						break;
+					}
 					case 'get-pronouns': {
 						const { platform, user_id, username } = request.payload;
 						const pronouns = await getPronouns(
@@ -387,6 +397,13 @@ const SevenTvRequestZ = z.object({
 	}),
 });
 
+const YouTubeGlobalEmotesRequestZ = z.object({
+	request_type: z.literal('get-youtube-global-emotes'),
+	payload: z.object({
+		account_id: z.string(),
+	}),
+});
+
 const AccountRequestZ = z.object({
 	request_type: z.literal([
 		'get-twitch-cheermotes',
@@ -427,6 +444,7 @@ const WidgetRequestZ = z.intersection(
 		widget_id: z.string(),
 	}),
 	z.discriminatedUnion('request_type', [
+		YouTubeGlobalEmotesRequestZ,
 		PronounsRequestZ,
 		SystemProxiedMessageRequestZ,
 		FollowDateRequestZ,

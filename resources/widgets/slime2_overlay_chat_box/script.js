@@ -405,11 +405,20 @@ async function loadYouTubeAccountAssets(newReadAccount) {
 	Widget.readAccounts.youtube = newReadAccount;
 	YouTube.thirdPartyEmotes.clear();
 
-	const [bttvUser, ffzRoom, sevenTvUser] = await Promise.all([
-		getBttvUser(newReadAccount),
-		getFfzRoom(newReadAccount),
-		getSevenTvUser(newReadAccount),
-	]);
+	const [youtubeGlobalEmotes, bttvUser, ffzRoom, sevenTvUser] =
+		await Promise.all([
+			getYouTubeGlobalEmotes(newReadAccount),
+			getBttvUser(newReadAccount),
+			getFfzRoom(newReadAccount),
+			getSevenTvUser(newReadAccount),
+		]);
+
+	youtubeGlobalEmotes?.forEach(emote => {
+		YouTube.thirdPartyEmotes.set(emote.name, {
+			type: 'youtube',
+			data: emote,
+		});
+	});
 
 	bttvUser?.emotes?.forEach(emote => {
 		YouTube.thirdPartyEmotes.set(emote.code, { type: 'bttv', data: emote });
@@ -1057,6 +1066,14 @@ function buildTextFragments(textFragment, platform = 'twitch') {
 				srcAnimated,
 				srcStatic,
 			});
+		} else if (thirdPartyEmote.type === 'youtube') {
+			const { srcAnimated, srcStatic } = thirdPartyEmote.data;
+			parsedFragments.push({
+				type: 'emote',
+				text: part,
+				srcAnimated,
+				srcStatic,
+			});
 		} else {
 			parsedFragments.push({ type: 'text', text: part });
 		}
@@ -1128,6 +1145,9 @@ function buildEmoteFragment(emoteFragment, platform = 'twitch') {
 			useStatic: true,
 		});
 	} else if (thirdPartyEmote.type === 'seventv') {
+		srcAnimated = thirdPartyEmote.data.srcAnimated;
+		srcStatic = thirdPartyEmote.data.srcStatic;
+	} else if (thirdPartyEmote.type === 'youtube') {
 		srcAnimated = thirdPartyEmote.data.srcAnimated;
 		srcStatic = thirdPartyEmote.data.srcStatic;
 	}
@@ -1306,6 +1326,18 @@ async function getSevenTvUser(account) {
 	return slime2.request('get-seventv-user', {
 		account_id: account.id,
 		platform: account.service,
+	});
+}
+
+/**
+ * Returns Slime2's best-effort fallback catalog for native YouTube live-chat
+ * emotes. YouTube does not expose this catalog through the supported Data API.
+ *
+ * @returns {Promise<Object[] | null>}
+ */
+async function getYouTubeGlobalEmotes(account) {
+	return slime2.request('get-youtube-global-emotes', {
+		account_id: account.id,
 	});
 }
 
