@@ -52,6 +52,40 @@ operation results across namespaces until restart. Reusing an operation ID
 for another key or mode is an error. This is duplicate suppression for
 concurrent delivery, not permanent event history.
 
+### Updating a value without losing concurrent changes
+
+Use `mode: 'compare-and-set'` for a read/modify/write operation. Send the
+revision returned by a fresh get as the string `expected_revision`:
+
+```js
+const current = await slime2.request('get-shared-widget-storage', {
+  scope: 'persistent', key: 'preferences',
+})
+const saved = await slime2.request('set-shared-widget-storage', {
+  scope: 'persistent', key: 'preferences',
+  mode: 'compare-and-set',
+  expected_revision: String(current.revision),
+  value_json: JSON.stringify({ ...(current.value ?? {}), theme: 'blue' }),
+  operation_id: 'unique-event-id',
+})
+if (saved.conflict) {
+  // Re-read, recompute the proposed value, and retry with the new revision.
+  // Use bounded retries with backoff; report failure if storage stays busy.
+}
+```
+
+The revision belongs to the entire namespace/scope, so writes to other keys
+can also cause conflicts. The app checks the revision inside the write lock.
+A conflict returns the current value and revision with `updated: false` and
+`conflict: true`; it neither writes nor sends a change notification. It does
+not consume the operation ID, so a retry may use the same ID. Successful
+compare-and-set calls return `conflict: false`, including no-op writes and
+duplicate operations. Missing, negative, fractional, or unsafe revisions
+are rejected. Failed disk writes leave both the value and revision unchanged.
+
+Older app builds reject this new mode. Clients must report the error instead
+of retrying as a plain `set`, which would lose the concurrency protection.
+
 Each get/set/delete request subscribes the widget ID to change notifications:
 
 ```js

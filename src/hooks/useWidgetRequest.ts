@@ -147,7 +147,7 @@ export default function useWidgetRequest() {
 						break;
 					}
 					case 'set-shared-widget-storage': {
-						const { scope, key, value_json, mode, operation_id } =
+						const { scope, key, value_json, mode, operation_id, expected_revision } =
 							request.payload;
 						const result = await setSharedWidgetStorage(
 							widget_id,
@@ -156,6 +156,7 @@ export default function useWidgetRequest() {
 							value_json,
 							mode,
 							operation_id,
+							expected_revision === undefined ? undefined : Number(expected_revision),
 						);
 						await Promise.all([
 							respond(result),
@@ -480,8 +481,9 @@ const SetSharedWidgetStorageRequestZ = z.object({
 		scope: SharedWidgetStorageScopeZ,
 		key: z.string(),
 		value_json: z.string(),
-		mode: z.literal(['set', 'set-if-absent']),
+		mode: z.literal(['set', 'set-if-absent', 'compare-and-set']),
 		operation_id: z.optional(z.string()),
+		expected_revision: z.optional(z.string().check(z.regex(/^(0|[1-9]\d{0,15})$/))),
 	}),
 });
 

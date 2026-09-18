@@ -32,6 +32,7 @@ export type SharedWidgetStorageResult = {
 	revision: number;
 	updated: boolean;
 	deleted?: boolean;
+	conflict?: boolean;
 };
 
 const MAX_NAMESPACE_LENGTH = 120;
@@ -76,12 +77,23 @@ export async function setSharedWidgetStorage(
 	scope: SharedWidgetStorageScope,
 	key: string,
 	valueJson: string,
-	mode: 'set' | 'set-if-absent',
+	mode: 'set' | 'set-if-absent' | 'compare-and-set',
 	operationId?: string,
+	expectedRevision?: number,
 ): Promise<SharedWidgetStorageResult> {
 	const namespace = await getNamespace(widgetId);
 	validateKey(key);
 	validateOperationId(operationId);
+	if (
+		mode === 'compare-and-set' &&
+		(typeof expectedRevision !== 'number' ||
+			!Number.isSafeInteger(expectedRevision) ||
+			expectedRevision < 0)
+	) {
+		throw new Error(
+			'compare-and-set requires a non-negative safe integer expected revision.',
+		);
+	}
 	const value = parseValue(valueJson);
 	const id = storageId(namespace, scope);
 	const operationKey = operationId
@@ -100,6 +112,21 @@ export async function setSharedWidgetStorage(
 		const store = await loadStore(namespace, scope);
 		const found = Object.prototype.hasOwnProperty.call(store.values, key);
 		let result: SharedWidgetStorageResult;
+
+		// Compare inside the same lock as the write. A rejected attempt must not
+		// consume its operation ID: clients re-read, merge, and retry that event.
+		if (mode === 'compare-and-set' && store.revision !== expectedRevision) {
+			return {
+				namespace,
+				scope,
+				key,
+				value: found ? structuredClone(store.values[key] ?? null) : null,
+				found,
+				revision: store.revision,
+				updated: false,
+				conflict: true,
+			};
+		}
 
 		if (
 			found &&
@@ -134,6 +161,7 @@ export async function setSharedWidgetStorage(
 			};
 		}
 
+		if (mode === 'compare-and-set') result.conflict = false;
 		if (operationKey)
 			rememberOperation(operationKey, operationSignature, result);
 		return structuredClone(result);

@@ -398,3 +398,52 @@ test('rejects unsafe inputs and corrupt files; namespace dots cannot become path
 	);
 	assert.equal(corrupt.writes.length, 0);
 });
+
+test('compare-and-set prevents lost updates and permits retrying the same operation', async () => {
+	const h = harness();
+	const first = await h.api.setSharedWidgetStorage(
+		'widget_left', 'persistent', 'links', '["a"]', 'compare-and-set', 'event:a', 0,
+	);
+	assert.equal(first.conflict, false);
+	const conflict = await h.api.setSharedWidgetStorage(
+		'widget_right', 'persistent', 'links', '["b"]', 'compare-and-set', 'event:b', 0,
+	);
+	assert.equal(conflict.conflict, true);
+	assert.equal(conflict.updated, false);
+	assert.equal(JSON.stringify(conflict.value), '["a"]');
+	assert.equal(h.writes.length, 1);
+	await h.api.broadcastSharedWidgetStorageChange(conflict);
+	assert.equal(h.notifications.length, 0);
+	const retry = await h.api.setSharedWidgetStorage(
+		'widget_right', 'persistent', 'links', '["a","b"]', 'compare-and-set', 'event:b', conflict.revision,
+	);
+	assert.equal(retry.conflict, false);
+	assert.equal(retry.updated, true);
+	const duplicate = await h.api.setSharedWidgetStorage(
+		'widget_vertical', 'persistent', 'links', '["stale"]', 'compare-and-set', 'event:b', 0,
+	);
+	assert.equal(duplicate.conflict, false);
+	assert.equal(duplicate.updated, false);
+	assert.equal(JSON.stringify(duplicate.value), '["a","b"]');
+	assert.equal(h.writes.length, 2);
+});
+
+test('compare-and-set rejects missing or invalid revisions and retries failed disk writes', async () => {
+	const h = harness();
+	for (const revision of [undefined, -1, NaN, 0.5, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
+		await assert.rejects(h.api.setSharedWidgetStorage(
+			'widget_left', 'persistent', 'key', '1', 'compare-and-set', 'command', revision,
+		), /expected revision/);
+	}
+	h.failSaves(true);
+	await assert.rejects(h.api.setSharedWidgetStorage(
+		'widget_left', 'persistent', 'key', '1', 'compare-and-set', 'command', 0,
+	), /Disk unavailable/);
+	h.failSaves(false);
+	const result = await h.api.setSharedWidgetStorage(
+		'widget_left', 'persistent', 'key', '1', 'compare-and-set', 'command', 0,
+	);
+	assert.equal(result.updated, true);
+	assert.equal(result.conflict, false);
+	assert.equal(h.writes.length, 1);
+});
