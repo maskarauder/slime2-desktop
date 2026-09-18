@@ -20,6 +20,8 @@ export default function useTwitchWebsocket() {
 	const { logEvent } = useEventsLogDispatch();
 
 	const twitchWebsockets = useRef(new Map<string, WebSocket | 'connecting'>());
+	const twitchReconnectTimers = useRef(new Map<string, number>());
+	const twitchReconnectAttempts = useRef(new Map<string, number>());
 
 	// necessary to get the updated account data within functions
 	const accountsRef = useRef(accounts);
@@ -43,12 +45,55 @@ export default function useTwitchWebsocket() {
 		return widgetMetasRef.current;
 	}
 
+	function scheduleTwitchReconnect(
+		twitchReadAccountId: string,
+		reconnectUrl?: string,
+	) {
+		const account = getAccount(twitchReadAccountId);
+		if (!account || account.reauthorize) return;
+		if (twitchReconnectTimers.current.has(twitchReadAccountId)) return;
+
+		const attempt = twitchReconnectAttempts.current.get(twitchReadAccountId) ?? 0;
+		const baseDelay = reconnectUrl
+			? 0
+			: Math.min(1000 * 2 ** attempt, 30 * 1000);
+		const deviation = reconnectUrl ? 0 : Math.random() * 1000 - 500;
+		const delay = Math.max(0, Math.floor(baseDelay + deviation));
+
+		twitchReconnectAttempts.current.set(twitchReadAccountId, attempt + 1);
+		console.warn(
+			'Reconnecting Twitch Websocket:',
+			account.displayName,
+			'reconnect attempt',
+			attempt + 1,
+			'in',
+			delay,
+			'milliseconds.',
+		);
+
+		const timer = window.setTimeout(() => {
+			twitchReconnectTimers.current.delete(twitchReadAccountId);
+			void connectTwitchWebsocket(twitchReadAccountId, reconnectUrl);
+		}, delay);
+		twitchReconnectTimers.current.set(twitchReadAccountId, timer);
+	}
+
 	async function connectTwitchWebsocket(
 		twitchReadAccountId: string,
 		reconnectUrl?: string,
 	) {
 		const account = getAccount(twitchReadAccountId);
 		if (!account) return;
+
+		const existingWebsocket = twitchWebsockets.current.get(account.id);
+		if (
+			existingWebsocket === 'connecting' ||
+			(existingWebsocket &&
+				(existingWebsocket.readyState === WebSocket.OPEN ||
+					existingWebsocket.readyState === WebSocket.CONNECTING))
+		) {
+			return;
+		}
 
 		console.info(
 			'Account registered to read Twitch events:',
@@ -57,18 +102,51 @@ export default function useTwitchWebsocket() {
 
 		twitchWebsockets.current.set(account.id, 'connecting');
 
-		await removeExistingEventSubs(account.id);
+		// A reconnect URL carries the existing Twitch subscriptions over to the
+		// new socket. Removing them here would disable them before the new socket
+		// receives its welcome message.
+		if (!reconnectUrl) {
+			try {
+				await removeExistingEventSubs(account.id);
+			} catch (error) {
+				console.error(
+					'Unable to clean up Twitch EventSub subscriptions before connecting:',
+					account.displayName,
+					error,
+				);
+				twitchWebsockets.current.delete(account.id);
+				scheduleTwitchReconnect(account.id);
+				return;
+			}
+		}
 
-		const websocket = new WebSocket(reconnectUrl ?? TWITCH_WEBSOCKET_URL);
+		let websocket: WebSocket;
+		try {
+			websocket = new WebSocket(reconnectUrl ?? TWITCH_WEBSOCKET_URL);
+		} catch (error) {
+			console.error(
+				'Unable to open Twitch Websocket:',
+				account.displayName,
+				error,
+			);
+			twitchWebsockets.current.delete(account.id);
+			scheduleTwitchReconnect(account.id);
+			return;
+		}
 		twitchWebsockets.current.set(account.id, websocket);
 
 		let connectionLostTimer: number | null = null;
 		let keepAliveTimeoutSeconds: number | null = null;
+		let suppressReconnect = false;
+
+		const isCurrentWebsocket = () =>
+			twitchWebsockets.current.get(account.id) === websocket;
 
 		const disconnectTwitchWebsocket = () => {
 			const account = getAccount(twitchReadAccountId);
+			clearConnectionLostTimer();
 			websocket.close();
-			if (account) {
+			if (account && isCurrentWebsocket()) {
 				twitchWebsockets.current.delete(account.id);
 			}
 		};
@@ -93,9 +171,10 @@ export default function useTwitchWebsocket() {
 						'Account lost connection to Twitch Websocket, reconnecting:',
 						account?.displayName,
 					);
+					suppressReconnect = true;
 					disconnectTwitchWebsocket();
 					if (account) {
-						connectTwitchWebsocket(account.id);
+						scheduleTwitchReconnect(account.id);
 					}
 
 					// 1200 instead of 1000 to allow extra time
@@ -110,6 +189,7 @@ export default function useTwitchWebsocket() {
 				'Twitch account requires reauthorization:',
 				account?.displayName,
 			);
+			suppressReconnect = true;
 			clearConnectionLostTimer();
 			disconnectTwitchWebsocket();
 			if (account) {
@@ -157,6 +237,15 @@ export default function useTwitchWebsocket() {
 
 					keepAliveTimeoutSeconds = payload.session.keepalive_timeout_seconds;
 					startConnectionLostTimer();
+					twitchReconnectAttempts.current.delete(account.id);
+
+					if (reconnectUrl) {
+						console.info(
+							'Reconnected to Twitch Websocket using the server reconnect URL:',
+							account.displayName,
+						);
+						break;
+					}
 
 					// create all eventsub subscriptions using sessionId
 					for (const params of createEventSubParamsList(account.serviceId)) {
@@ -353,13 +442,14 @@ export default function useTwitchWebsocket() {
 				// https://dev.twitch.tv/docs/eventsub/handling-websocket-events/#reconnect-message
 				case 'session_reconnect': {
 					clearConnectionLostTimer();
+					suppressReconnect = true;
 					disconnectTwitchWebsocket();
 
 					const { payload } =
 						twitchMessage as Twitch.WebsocketMessage.Reconnect;
 
 					// create new websocket with reconnect_url
-					connectTwitchWebsocket(account.id, payload.session.reconnect_url);
+					scheduleTwitchReconnect(account.id, payload.session.reconnect_url);
 
 					break;
 				}
@@ -392,6 +482,31 @@ export default function useTwitchWebsocket() {
 					break;
 				}
 			}
+			});
+
+		websocket.addEventListener('error', event => {
+			console.error(
+				'Twitch Websocket error:',
+				account.displayName,
+				event,
+			);
+			// The close handler performs the reconnect. Calling close here also
+			// handles sockets that fail before the first keepalive is received.
+			websocket.close();
+		});
+
+		websocket.addEventListener('close', event => {
+			clearConnectionLostTimer();
+			if (!isCurrentWebsocket()) return;
+			twitchWebsockets.current.delete(account.id);
+			console.warn(
+				'Twitch Websocket closed:',
+				account.displayName,
+				'code',
+				event.code,
+				event.reason || '(no reason)',
+			);
+			if (!suppressReconnect) scheduleTwitchReconnect(account.id);
 		});
 	}
 

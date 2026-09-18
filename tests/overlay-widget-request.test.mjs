@@ -26,6 +26,7 @@ function harness() {
 	const effects = [];
 	const refs = [];
 	const timers = new Map();
+	const intervals = new Map();
 	const sockets = [];
 	let nextId = 0;
 	class Socket {
@@ -58,6 +59,9 @@ function harness() {
 			this.readyState = 3;
 			this.listeners.get('close')?.forEach(fn => fn());
 			this.onclose?.({ code });
+		}
+		message(payload) {
+			this.onmessage?.({ data: JSON.stringify(payload) });
 		}
 	}
 	const exports = {};
@@ -98,7 +102,7 @@ function harness() {
 		exports,
 		slime2,
 		WebSocket: Socket,
-		console: { info() {}, error() {} },
+		console: { info() {}, warn() {}, error() {} },
 		setTimeout(fn, delay) {
 			const id = ++nextId;
 			timers.set(id, { fn, delay });
@@ -106,6 +110,14 @@ function harness() {
 		},
 		clearTimeout(id) {
 			timers.delete(id);
+		},
+		setInterval(fn, delay) {
+			const id = ++nextId;
+			intervals.set(id, { fn, delay });
+			return id;
+		},
+		clearInterval(id) {
+			intervals.delete(id);
 		},
 		require(name) {
 			return dependencies[name];
@@ -117,6 +129,7 @@ function harness() {
 		slime2,
 		refs,
 		timers,
+		intervals,
 		sockets,
 		cleanup: () => cleanup.forEach(fn => fn?.()),
 	};
@@ -167,5 +180,39 @@ test('a request waiting for connection removes both listeners when it times out'
 	assert.equal(h.sockets[0].listeners.get('open').size, 0);
 	assert.equal(h.sockets[0].listeners.get('close').size, 0);
 	assert.equal(h.refs[1].current.size, 0);
+	h.cleanup();
+});
+
+test('the widget heartbeat is acknowledged without dispatching a widget event', () => {
+	const h = harness();
+	h.sockets[0].open();
+	assert.equal(h.sockets[0].sent.at(-1).type, 'heartbeat');
+	const heartbeatTimeout = [...h.timers.values()].find(
+		item => item.delay === 10000,
+	);
+	assert(heartbeatTimeout);
+	h.sockets[0].message({
+		widgetId: 'widget_test',
+		type: 'heartbeat',
+		data: { timestamp: Date.now() },
+	});
+	assert.equal(
+		[...h.timers.values()].some(item => item.delay === 10000),
+		false,
+	);
+	assert.equal(h.intervals.size, 1);
+	h.cleanup();
+});
+
+test('a missing widget heartbeat acknowledgement closes the socket', () => {
+	const h = harness();
+	h.sockets[0].open();
+	const heartbeatTimeout = [...h.timers.values()].find(
+		item => item.delay === 10000,
+	);
+	assert(heartbeatTimeout);
+	heartbeatTimeout.fn();
+	assert.equal(h.sockets[0].readyState, 3);
+	assert.equal(h.intervals.size, 0);
 	h.cleanup();
 });

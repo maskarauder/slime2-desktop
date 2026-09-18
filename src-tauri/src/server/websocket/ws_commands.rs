@@ -21,6 +21,7 @@ pub struct Command {
 pub enum CommandData {
 	Register(RegisterData),
 	Request(RequestData),
+	Heartbeat(HeartbeatData),
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -35,6 +36,12 @@ pub struct RequestData {
 	request_id: String,
 	request_type: String,
 	payload: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct HeartbeatData {
+	widget_id: String,
+	timestamp: u64,
 }
 
 #[derive(Clone, Serialize)]
@@ -102,4 +109,34 @@ pub fn request(command_data: CommandData) -> Result<(), String> {
 	}
 
 	Ok(())
+}
+
+pub async fn heartbeat(
+	command_data: CommandData,
+	connection_id: usize,
+	connections: &WebsocketConnections,
+) -> Result<(), String> {
+	let CommandData::Heartbeat(heartbeat_data) = command_data else {
+		return Err(String::from("Heartbeat command is incorrectly formatted!"));
+	};
+
+	let message = serde_json::json!({
+		"widgetId": heartbeat_data.widget_id,
+		"type": "heartbeat",
+		"data": { "timestamp": heartbeat_data.timestamp },
+	})
+	.to_string();
+
+	let connections_read_guard = connections.read().await;
+	let Some(connection) = connections_read_guard
+		.iter()
+		.find(|connection| connection.id == connection_id)
+	else {
+		return Err(format!(
+			"Heartbeat connection (ID: {}) is no longer registered!",
+			connection_id
+		));
+	};
+
+	connection.send_direct(&message)
 }

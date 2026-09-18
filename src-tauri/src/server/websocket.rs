@@ -60,6 +60,12 @@ impl WebsocketConnection {
 			}
 		}
 	}
+
+	pub fn send_direct(&self, message: &str) -> Result<(), String> {
+		self.sender
+			.send(Message::text(message))
+			.map_err(|_| String::from("Websocket connection is closed."))
+	}
 }
 
 pub async fn connect(websocket: WebSocket, connections: WebsocketConnections) {
@@ -179,6 +185,16 @@ async fn message_handler(
 		match command.r#type.as_str() {
 			"request" => {
 				if let Err(error) = ws_commands::request(command.data) {
+					return Err(format!(
+						"Error from (ID: {}): {}",
+						connection_id, error
+					));
+				}
+			}
+			"heartbeat" => {
+				if let Err(error) =
+					ws_commands::heartbeat(command.data, connection_id, connections).await
+				{
 					return Err(format!(
 						"Error from (ID: {}): {}",
 						connection_id, error

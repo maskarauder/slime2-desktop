@@ -18,6 +18,9 @@ const ResponseEventData = z.object({
 });
 type ResponseEventData = z.infer<typeof ResponseEventData>;
 
+const HEARTBEAT_INTERVAL_MS = 15 * 1000;
+const HEARTBEAT_TIMEOUT_MS = 10 * 1000;
+
 export default function useSlime2Websocket() {
 	const websocketRef = useRef<WebSocket>(null);
 	const requestMapRef = useRef(
@@ -26,12 +29,72 @@ export default function useSlime2Websocket() {
 	const devLogEventsRef = useRef(false);
 	const reconnectTimerRef = useRef<number>(null);
 	const connectAttemptRef = useRef(0);
+	const heartbeatIntervalRef = useRef<number>(null);
+	const heartbeatTimeoutRef = useRef<number>(null);
+	const heartbeatPendingRef = useRef(false);
 
 	const { widgetId } = useLoaderData({ from: '/$' });
 	globalThis.slime2.widgetId = widgetId;
 
+	function stopHeartbeat() {
+		if (heartbeatIntervalRef.current !== null) {
+			clearInterval(heartbeatIntervalRef.current);
+			heartbeatIntervalRef.current = null;
+		}
+		if (heartbeatTimeoutRef.current !== null) {
+			clearTimeout(heartbeatTimeoutRef.current);
+			heartbeatTimeoutRef.current = null;
+		}
+		heartbeatPendingRef.current = false;
+	}
+
+	function startHeartbeat(websocket: WebSocket) {
+		stopHeartbeat();
+
+		const sendHeartbeat = () => {
+			if (websocket.readyState !== WebSocket.OPEN) return;
+
+			heartbeatPendingRef.current = true;
+			try {
+				websocket.send(
+					JSON.stringify({
+						type: 'heartbeat',
+						data: {
+							widget_id: widgetId,
+							timestamp: Date.now(),
+						},
+					}),
+				);
+			} catch {
+				websocket.close();
+				return;
+			}
+
+			if (heartbeatTimeoutRef.current !== null) {
+				clearTimeout(heartbeatTimeoutRef.current);
+			}
+			heartbeatTimeoutRef.current = setTimeout(() => {
+				if (heartbeatPendingRef.current && websocketRef.current === websocket) {
+					console.warn(
+						'Slime2 heartbeat timed out; reconnecting the widget websocket.',
+					);
+					websocket.close();
+				}
+			}, HEARTBEAT_TIMEOUT_MS);
+		};
+
+		sendHeartbeat();
+		heartbeatIntervalRef.current = setInterval(
+			sendHeartbeat,
+			HEARTBEAT_INTERVAL_MS,
+		);
+	}
+
 	const connect = useCallback(() => {
-		if (websocketRef.current?.readyState === WebSocket.OPEN) {
+		if (
+			websocketRef.current?.readyState === WebSocket.OPEN ||
+			websocketRef.current?.readyState === WebSocket.CONNECTING
+		) {
 			// websocket already open
 			return;
 		}
@@ -147,6 +210,7 @@ export default function useSlime2Websocket() {
 				},
 			});
 			websocket.send(message);
+			startHeartbeat(websocket);
 		};
 
 		// listen to websocket messages from slime2 to widget
@@ -182,6 +246,14 @@ export default function useSlime2Websocket() {
 					location.reload();
 				} else if (type === 'log-events') {
 					devLogEventsRef.current = !!data?.logEvents;
+				} else if (type === 'heartbeat') {
+					if (websocketRef.current === websocket) {
+						heartbeatPendingRef.current = false;
+						if (heartbeatTimeoutRef.current !== null) {
+							clearTimeout(heartbeatTimeoutRef.current);
+							heartbeatTimeoutRef.current = null;
+						}
+					}
 				} else {
 					const newType = `slime2:${type}`;
 					const newData = { widget_id: widgetId, ...data };
@@ -221,6 +293,8 @@ export default function useSlime2Websocket() {
 		};
 
 		websocket.onclose = event => {
+			if (websocketRef.current !== websocket) return;
+			stopHeartbeat();
 			for (const [, reject] of requestMapRef.current.values()) {
 				reject(new Error('Slime2 disconnected during the request.'));
 			}
@@ -263,6 +337,7 @@ export default function useSlime2Websocket() {
 
 		return () => {
 			clearTimeout(reconnectTimerRef.current ?? undefined);
+			stopHeartbeat();
 
 			websocketRef.current?.close(3000, 'Component Unmounted');
 			globalThis.slime2.request = async () => null;
