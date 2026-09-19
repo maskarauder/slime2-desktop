@@ -42,6 +42,9 @@ export function getYouTubeErrorDetails(error: unknown): YouTubeErrorDetails {
 	}
 
 	if (error instanceof Error) {
+		if ('grpcCode' in error && typeof error.grpcCode === 'number') {
+			return { message: error.message, code: `GRPC_${error.grpcCode}` };
+		}
 		return (
 			parseGoogleOAuthError(error.message) ?? { message: error.message }
 		);

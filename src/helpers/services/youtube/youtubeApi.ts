@@ -66,7 +66,7 @@ const youtubeApi = {
 				params: {
 					liveChatId,
 					part: 'id,snippet,authorDetails',
-					maxResults: 200,
+					maxResults: 2000,
 					pageToken,
 					profileImageSize: 88,
 				},

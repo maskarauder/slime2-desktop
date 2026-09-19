@@ -16,6 +16,7 @@ mod file;
 mod secret;
 mod server;
 mod tiktok;
+mod youtube;
 mod watcher;
 
 mod twitch;
@@ -169,6 +170,7 @@ async fn main() {
 		.plugin(tauri_plugin_opener::init())
 		.manage(connections.clone())
 		.manage(tiktok::TikTokConnections::default())
+		.manage(slime2_youtube_stream::YouTubeStreams::default())
 		.manage(AppState::default())
 		.setup(|app: &mut tauri::App| {
 			log::info!("Welcome to Slime2!");
@@ -218,6 +220,9 @@ async fn main() {
 			Ok(())
 		})
 		.invoke_handler(tauri::generate_handler![
+			youtube::open_youtube_chat_stream,
+			youtube::next_youtube_chat_batch,
+			youtube::close_youtube_chat_stream,
 			commands::send_websocket_message,
 			commands::start_tiktok_live,
 			commands::stop_tiktok_live,

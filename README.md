@@ -47,9 +47,29 @@ does not send YouTube chat messages.
 
 ## Live-chat recovery
 
-The chat readers continue polling while a chat is quiet. YouTube requests have
-a 30-second deadline; a temporary network failure retries with backoff while
-keeping the current live-chat page token. Saved YouTube credentials are kept
+YouTube live chat uses Google's `liveChatMessages.streamList` gRPC connection
+in the Rust backend. One reader per account shares messages with all widgets;
+adding browser sources does not add Google API readers. The connection stays
+open during quiet chat, with HTTP/2 keepalive to detect a broken network.
+Connecting has a 30-second deadline per connection/RPC-opening stage; the
+established stream has no message-inactivity deadline. Reconnects use the last
+successfully delivered `nextPageToken` and suppress duplicate message IDs.
+
+After three consecutive streaming failures (or an unsupported streaming
+endpoint), Slime2 uses the existing REST `liveChatMessages.list` API for ten
+minutes before trying streaming again. REST polls wait **at least 30 seconds**
+between requests, including retries, and honor a longer `pollingIntervalMillis`
+when Google requests it. Each REST response can contain up to 2,000 messages.
+Only one transport reads chat at a time. If the stream ends, Slime2 checks for
+another active broadcast once per minute.
+
+`streamList` is still part of the YouTube Data API v3; it reduces polling but
+does not bypass Google quotas. Account/channel lookup and broadcast discovery
+also still use the REST API. Quota failures pause the reader for 15 minutes
+before retrying, keeping the saved authorization. Repeated permission or gRPC
+resource-limit failures also pause instead of repeatedly switching transports.
+
+Saved YouTube credentials are kept
 when a refresh attempt times out or Google returns a temporary server, rate
 limit, or network error. The account is marked for reconnection only when
 Google rejects the credentials themselves, such as `invalid_grant` or
@@ -65,6 +85,37 @@ The recovery code logs the account name, retry delay, safe HTTP status/reason,
 and recovery event. It never logs OAuth headers, access tokens, refresh tokens,
 or API keys. Rebuild Slime2 after applying the patch; existing account and
 widget settings do not need to be recreated.
+
+### YouTube streaming development
+
+The transport and message conversion live in `src-tauri/youtube-stream/`,
+using Google's schema in `src-tauri/youtube-stream/proto/stream_list.proto`.
+The build downloads a bundled Protocol Buffers compiler through Cargo;
+Windows builds do not require a separate `protoc` installation. Build Slime2
+normally with `npm ci` and `npm run build` after applying this patch.
+
+The Tauri commands are in `src-tauri/src/youtube.rs`. Frontend lifecycle,
+fallback timing and widget delivery are connected through
+`src/helpers/services/youtube/youtubeStream.ts`,
+`src/helpers/services/youtube/youtubeChatReader.ts` and
+`src/hooks/useYouTubeChat.ts`. Existing widgets consume the same event format.
+
+Run the focused checks from the repository root:
+
+```sh
+node --test tests/youtube-streamlist.test.mjs tests/youtube-error-details.test.mjs
+cargo test --manifest-path src-tauri/youtube-stream/Cargo.toml
+cargo check --manifest-path src-tauri/Cargo.toml
+```
+
+The transport tests use a local gRPC server and do not require Google
+credentials or quota. A live test should show `YouTube streamList connected`
+in Slime2's log. A blocked gRPC connection instead logs the REST fallback and
+its 30-second minimum interval. Test a quiet period and a network interruption
+as well as normal messages before relying on the new build during a stream.
+
+References: [Google's streaming guide](https://developers.google.com/youtube/v3/live/streaming-live-chat)
+and [`streamList` reference](https://developers.google.com/youtube/v3/live/docs/liveChatMessages/streamList).
 
 ## Experimental TikTok LIVE chat setup
 
