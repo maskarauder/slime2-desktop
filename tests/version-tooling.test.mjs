@@ -30,11 +30,12 @@ function project(t, crlf = false) {
 		const text = readFileSync(
 			new URL(`../${file}`, import.meta.url),
 			'utf8',
-		);
+		).replace(/\r\n/g, '\n');
+		// Each case controls its line endings, independent of the Git checkout.
 		mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
 		writeFileSync(
 			path.join(root, file),
-			crlf ? text.replace(/\r?\n/g, '\r\n') : text,
+			crlf ? text.replace(/\n/g, '\r\n') : text,
 		);
 	}
 	const read = file => readFileSync(path.join(root, file), 'utf8');
@@ -45,6 +46,7 @@ function project(t, crlf = false) {
 for (const crlf of [false, true])
 	test(`version bump preserves dependencies, independent crate versions and ${crlf ? 'CRLF' : 'LF'} formatting`, t => {
 		const p = project(t, crlf);
+		assert.equal(p.read('package.json').includes('\r\n'), crlf);
 		const current = JSON.parse(p.read('package.json')).version;
 		assert.equal(planVersion(p.root).changes.length, 0);
 		const next = current === '1.5.9' ? '1.5.8' : '1.5.9';
@@ -77,22 +79,24 @@ test('rejects invalid/MSI-incompatible versions without changing files', t => {
 	for (const file of files) assert.equal(p.read(file), p.before[file]);
 });
 
-test('detects drift in nested lockfile root versions and leaves dependencies intact', t => {
-	const p = project(t);
-	const file = 'src-overlay/package-lock.json';
-	const lock = JSON.parse(p.read(file));
-	lock.packages[''].version = '0.0.1';
-	writeFileSync(
-		path.join(p.root, file),
-		JSON.stringify(lock, null, '\t') + '\n',
-	);
-	assert.deepEqual(
-		planVersion(p.root).changes.map(change => change.file),
-		[file],
-	);
-	writeVersion(p.root, planVersion(p.root).changes);
-	assert.equal(p.read(file), p.before[file]);
-});
+for (const crlf of [false, true])
+	test(`detects nested lockfile version drift and preserves dependencies and ${crlf ? 'CRLF' : 'LF'} formatting`, t => {
+		const p = project(t, crlf);
+		const file = 'src-overlay/package-lock.json';
+		const lock = JSON.parse(p.read(file));
+		lock.packages[''].version = '0.0.1';
+		const modified = JSON.stringify(lock, null, '\t') + '\n';
+		writeFileSync(
+			path.join(p.root, file),
+			crlf ? modified.replace(/\n/g, '\r\n') : modified,
+		);
+		assert.deepEqual(
+			planVersion(p.root).changes.map(change => change.file),
+			[file],
+		);
+		writeVersion(p.root, planVersion(p.root).changes);
+		assert.equal(p.read(file), p.before[file]);
+	});
 
 test('preflights malformed manifests and a missing app Cargo lock entry before writing', t => {
 	const p = project(t);
