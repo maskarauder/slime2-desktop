@@ -6,6 +6,7 @@ import sevenTvApi from '@/helpers/services/emotes/sevenTV';
 import { getYouTubeGlobalEmotes } from '@/helpers/services/emotes/YouTube';
 import { getSystemProxiedMessage } from '@/helpers/services/pluralmind';
 import { getPronouns } from '@/helpers/services/pronouns';
+import { resolveWidgetPlatformUser } from '@/helpers/services/platformUserLookup';
 import twitchApi from '@/helpers/services/twitch/twitchApi';
 import { getTwitchFollowDate } from '@/helpers/services/twitch/twitchFollowDate';
 import { capitalizeWord } from '@/helpers/string';
@@ -139,6 +140,16 @@ export default function useWidgetRequest() {
 				}
 
 				switch (request.request_type) {
+					case 'resolve-platform-user': {
+						await respond(
+							await resolveWidgetPlatformUser(
+								widget_id,
+								accountsRef.current,
+								request.payload,
+							),
+						);
+						break;
+					}
 					case 'get-shared-widget-storage': {
 						const { scope, key } = request.payload;
 						await respond(
@@ -416,6 +427,15 @@ const FollowDateRequestZ = z.object({
 	}),
 });
 
+const ResolvePlatformUserRequestZ = z.object({
+	request_type: z.literal('resolve-platform-user'),
+	payload: z.object({
+		account_id: z.string(),
+		platform: z.literal(['twitch', 'youtube', 'tiktok']),
+		username: z.string().check(z.minLength(1), z.maxLength(200)),
+	}),
+});
+
 const PronounsRequestZ = z.object({
 	request_type: z.literal('get-pronouns'),
 	payload: z.object({
@@ -536,6 +556,7 @@ const WidgetRequestZ = z.intersection(
 		widget_id: z.string(),
 	}),
 	z.discriminatedUnion('request_type', [
+		ResolvePlatformUserRequestZ,
 		GetSharedWidgetStorageRequestZ,
 		SetSharedWidgetStorageRequestZ,
 		DeleteSharedWidgetStorageRequestZ,

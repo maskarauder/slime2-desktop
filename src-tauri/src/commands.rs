@@ -132,6 +132,19 @@ pub async fn stop_tiktok_live(
 }
 
 #[tauri::command]
+pub async fn lookup_tiktok_user_id(
+	account_id: String,
+	username: String,
+	state: State<'_, AppState>,
+) -> Result<String, String> {
+	let stored = get_secret(state, &account_id)
+		.map_err(|_| "TIKTOK_LOOKUP_CREDENTIALS".to_string())?;
+	let tokens: StoredTokens = serde_json::from_str(&stored)
+		.map_err(|_| "TIKTOK_LOOKUP_CREDENTIALS".to_string())?;
+	crate::tiktok_lookup::lookup_user_id(&username, &tokens.access_token).await
+}
+
+#[tauri::command]
 pub async fn copy_widget(
 	widget_id: &str,
 	app_handle: AppHandle,

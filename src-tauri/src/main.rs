@@ -16,6 +16,7 @@ mod file;
 mod secret;
 mod server;
 mod tiktok;
+mod tiktok_lookup;
 mod youtube;
 mod watcher;
 
@@ -226,6 +227,7 @@ async fn main() {
 			commands::send_websocket_message,
 			commands::start_tiktok_live,
 			commands::stop_tiktok_live,
+			commands::lookup_tiktok_user_id,
 			commands::copy_widget,
 			commands::delete_widget,
 			commands::install_custom_widget,

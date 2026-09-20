@@ -20,6 +20,13 @@ export async function stopTikTokLive(accountId: string): Promise<void> {
 	return invoke('stop_tiktok_live', { accountId });
 }
 
+export async function lookupTikTokUserId(
+	accountId: string,
+	username: string,
+): Promise<string> {
+	return invoke('lookup_tiktok_user_id', { accountId, username });
+}
+
 export async function installCustomWidget(zipPath: string): Promise<string> {
 	return invoke('install_custom_widget', { zipPath });
 }

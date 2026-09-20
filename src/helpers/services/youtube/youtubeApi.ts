@@ -15,6 +15,25 @@ const youtubeApiAxios = axios.create({
 });
 
 const youtubeApi = {
+	async getChannelByHandle(
+		accountId: string,
+		handle: string,
+		signal?: AbortSignal,
+	) {
+		return youtubeApiGet<YouTubeListResponse<YouTubeChannel>>(
+			'/channels',
+			accountId,
+			{
+				params: {
+					forHandle: handle,
+					part: 'id,snippet',
+					maxResults: 1,
+				},
+				signal,
+			},
+		);
+	},
+
 	async getMyChannelWithAccessToken(accessToken: string) {
 		return youtubeRequest<YouTubeListResponse<YouTubeChannel>>(
 			'/channels',

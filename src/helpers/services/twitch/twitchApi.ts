@@ -6,6 +6,18 @@ import { TWITCH_CLIENT_ID } from './twitchConstants';
 const twitchApiAxios = axios.create({ baseURL: 'https://api.twitch.tv/helix' });
 
 const twitchApi = {
+	async getUserByLogin(
+		accountId: string,
+		login: string,
+		signal?: AbortSignal,
+	) {
+		return twitchApiGet<Twitch.ApiResponse.GetUser>('/users', accountId, {
+			params: { login },
+			signal,
+			timeout: 15_000,
+		});
+	},
+
 	async getUser(accountId: string, userId?: string) {
 		return twitchApiGet<Twitch.ApiResponse.GetUser>(
 			'/users',
