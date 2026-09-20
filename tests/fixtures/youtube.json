@@ -1,0 +1,207 @@
+{
+	"messages": [
+		{
+			"id": "fixture-yt-text",
+			"snippet": {
+				"type": "textMessageEvent",
+				"liveChatId": "fixture-live-chat",
+				"authorChannelId": "UCfixtureViewer0000000000",
+				"publishedAt": "2026-01-01T00:00:00Z",
+				"hasDisplayContent": true,
+				"displayMessage": "Hello :face-red-droopy-eyes:",
+				"textMessageDetails": {
+					"messageText": "Hello :face-red-droopy-eyes:"
+				}
+			},
+			"authorDetails": {
+				"channelId": "UCfixtureViewer0000000000",
+				"channelUrl": "https://example.invalid/channel/fixture-viewer",
+				"displayName": "Fixture Viewer",
+				"profileImageUrl": "https://example.invalid/avatar.png",
+				"isVerified": false,
+				"isChatOwner": false,
+				"isChatSponsor": true,
+				"isChatModerator": false
+			}
+		},
+		{
+			"id": "fixture-yt-superchat",
+			"snippet": {
+				"type": "superChatEvent",
+				"liveChatId": "fixture-live-chat",
+				"authorChannelId": "UCfixtureViewer0000000000",
+				"publishedAt": "2026-01-01T00:00:00Z",
+				"hasDisplayContent": true,
+				"superChatDetails": {
+					"amountMicros": "5000000",
+					"currency": "USD",
+					"amountDisplayString": "$5.00",
+					"userComment": "Great stream!",
+					"tier": 1
+				}
+			},
+			"authorDetails": {
+				"channelId": "UCfixtureViewer0000000000",
+				"channelUrl": "https://example.invalid/channel/fixture-viewer",
+				"displayName": "Fixture Viewer",
+				"profileImageUrl": "https://example.invalid/avatar.png",
+				"isVerified": false,
+				"isChatOwner": false,
+				"isChatSponsor": true,
+				"isChatModerator": false
+			}
+		},
+		{
+			"id": "fixture-yt-sticker",
+			"snippet": {
+				"type": "superStickerEvent",
+				"liveChatId": "fixture-live-chat",
+				"authorChannelId": "UCfixtureViewer0000000000",
+				"publishedAt": "2026-01-01T00:00:00Z",
+				"hasDisplayContent": true,
+				"superStickerDetails": {
+					"amountMicros": "2000000",
+					"currency": "USD",
+					"amountDisplayString": "$2.00",
+					"tier": 1,
+					"superStickerMetadata": {
+						"stickerId": "fixture-sticker",
+						"altText": "Waving",
+						"language": "en"
+					}
+				}
+			},
+			"authorDetails": {
+				"channelId": "UCfixtureViewer0000000000",
+				"channelUrl": "https://example.invalid/channel/fixture-viewer",
+				"displayName": "Fixture Viewer",
+				"profileImageUrl": "https://example.invalid/avatar.png",
+				"isVerified": false,
+				"isChatOwner": false,
+				"isChatSponsor": true,
+				"isChatModerator": false
+			}
+		},
+		{
+			"id": "fixture-yt-member",
+			"snippet": {
+				"type": "newSponsorEvent",
+				"liveChatId": "fixture-live-chat",
+				"authorChannelId": "UCfixtureViewer0000000000",
+				"publishedAt": "2026-01-01T00:00:00Z",
+				"hasDisplayContent": true,
+				"newSponsorDetails": {
+					"memberLevelName": "Supporter",
+					"isUpgrade": false
+				}
+			},
+			"authorDetails": {
+				"channelId": "UCfixtureViewer0000000000",
+				"channelUrl": "https://example.invalid/channel/fixture-viewer",
+				"displayName": "Fixture Viewer",
+				"profileImageUrl": "https://example.invalid/avatar.png",
+				"isVerified": false,
+				"isChatOwner": false,
+				"isChatSponsor": true,
+				"isChatModerator": false
+			}
+		},
+		{
+			"id": "fixture-yt-milestone",
+			"snippet": {
+				"type": "memberMilestoneChatEvent",
+				"liveChatId": "fixture-live-chat",
+				"authorChannelId": "UCfixtureViewer0000000000",
+				"publishedAt": "2026-01-01T00:00:00Z",
+				"hasDisplayContent": true,
+				"memberMilestoneChatDetails": {
+					"userComment": "Six months!",
+					"memberMonth": 6,
+					"memberLevelName": "Supporter"
+				}
+			},
+			"authorDetails": {
+				"channelId": "UCfixtureViewer0000000000",
+				"channelUrl": "https://example.invalid/channel/fixture-viewer",
+				"displayName": "Fixture Viewer",
+				"profileImageUrl": "https://example.invalid/avatar.png",
+				"isVerified": false,
+				"isChatOwner": false,
+				"isChatSponsor": true,
+				"isChatModerator": false
+			}
+		},
+		{
+			"id": "fixture-yt-gift",
+			"snippet": {
+				"type": "membershipGiftingEvent",
+				"liveChatId": "fixture-live-chat",
+				"authorChannelId": "UCfixtureViewer0000000000",
+				"publishedAt": "2026-01-01T00:00:00Z",
+				"hasDisplayContent": true,
+				"membershipGiftingDetails": {
+					"giftMembershipsCount": 5,
+					"giftMembershipsLevelName": "Supporter"
+				}
+			},
+			"authorDetails": {
+				"channelId": "UCfixtureViewer0000000000",
+				"channelUrl": "https://example.invalid/channel/fixture-viewer",
+				"displayName": "Fixture Viewer",
+				"profileImageUrl": "https://example.invalid/avatar.png",
+				"isVerified": false,
+				"isChatOwner": false,
+				"isChatSponsor": true,
+				"isChatModerator": false
+			}
+		},
+		{
+			"id": "fixture-yt-received",
+			"snippet": {
+				"type": "giftMembershipReceivedEvent",
+				"liveChatId": "fixture-live-chat",
+				"authorChannelId": "UCfixtureViewer0000000000",
+				"publishedAt": "2026-01-01T00:00:00Z",
+				"hasDisplayContent": true,
+				"giftMembershipReceivedDetails": {
+					"memberLevelName": "Supporter",
+					"gifterChannelId": "UCfixtureViewer0000000000",
+					"associatedMembershipGiftingMessageId": "fixture-yt-gift"
+				}
+			},
+			"authorDetails": {
+				"channelId": "UCfixtureViewer0000000000",
+				"channelUrl": "https://example.invalid/channel/fixture-viewer",
+				"displayName": "Fixture Viewer",
+				"profileImageUrl": "https://example.invalid/avatar.png",
+				"isVerified": false,
+				"isChatOwner": false,
+				"isChatSponsor": true,
+				"isChatModerator": false
+			}
+		},
+		{
+			"id": "fixture-yt-delete",
+			"snippet": {
+				"type": "messageDeletedEvent",
+				"liveChatId": "fixture-live-chat",
+				"authorChannelId": "UCfixtureViewer0000000000",
+				"publishedAt": "2026-01-01T00:00:00Z",
+				"hasDisplayContent": true,
+				"messageDeletedDetails": {
+					"deletedMessageId": "fixture-yt-text"
+				}
+			},
+			"authorDetails": {
+				"channelId": "UCfixtureViewer0000000000",
+				"channelUrl": "https://example.invalid/channel/fixture-viewer",
+				"displayName": "Fixture Viewer",
+				"profileImageUrl": "https://example.invalid/avatar.png",
+				"isVerified": false,
+				"isChatOwner": false,
+				"isChatSponsor": true,
+				"isChatModerator": false
+			}
+		}
+	]
+}

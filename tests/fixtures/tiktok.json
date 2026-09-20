@@ -1,0 +1,45 @@
+{
+	"timestamp": 1767225600000,
+	"messages": [
+		{
+			"type": "WebcastChatMessage",
+			"data": {
+				"common": {
+					"msgId": "9000000000000000001",
+					"createTime": "1767225600"
+				},
+				"user": {
+					"userId": "9000000000000000002",
+					"uniqueId": "fixture_viewer",
+					"nickname": "Fixture Viewer"
+				},
+				"comment": "Hi 😀 ￼!",
+				"emotes": [
+					{
+						"placeInComment": 5,
+						"emote": {
+							"emoteId": "fixture-wave",
+							"image": {
+								"imageUrl": "https://example.invalid/wave.gif"
+							}
+						}
+					}
+				]
+			}
+		},
+		{
+			"type": "WebcastGiftMessage",
+			"data": {
+				"common": {
+					"msgId": "9000000000000000003"
+				},
+				"giftId": 123,
+				"repeatCount": 1
+			}
+		},
+		{
+			"type": "WebcastChatMessage",
+			"data": "{\"comment\":\"missing author\"}"
+		}
+	]
+}

@@ -1,0 +1,177 @@
+{
+	"welcome": {
+		"metadata": {
+			"message_id": "welcome-1",
+			"message_type": "session_welcome",
+			"message_timestamp": "2026-01-01T00:00:00Z"
+		},
+		"payload": {
+			"session": {
+				"id": "fixture-first",
+				"keepalive_timeout_seconds": 10
+			}
+		}
+	},
+	"reconnect": {
+		"metadata": {
+			"message_id": "reconnect-1",
+			"message_type": "session_reconnect",
+			"message_timestamp": "2026-01-01T00:00:00Z"
+		},
+		"payload": {
+			"session": {
+				"id": "fixture-first",
+				"reconnect_url": "wss://eventsub.wss.twitch.tv/ws?session=fixture-next"
+			}
+		}
+	},
+	"resumed": {
+		"metadata": {
+			"message_id": "welcome-2",
+			"message_type": "session_welcome",
+			"message_timestamp": "2026-01-01T00:00:00Z"
+		},
+		"payload": {
+			"session": {
+				"id": "fixture-next",
+				"keepalive_timeout_seconds": 10
+			}
+		}
+	},
+	"notifications": [
+		{
+			"metadata": {
+				"message_id": "fixture-twitch-chat",
+				"message_type": "notification",
+				"message_timestamp": "2026-01-01T00:00:00Z",
+				"subscription_type": "channel.chat.message",
+				"subscription_version": "1"
+			},
+			"payload": {
+				"subscription": {
+					"id": "fixture-subscription",
+					"type": "channel.chat.message",
+					"version": "1",
+					"status": "enabled"
+				},
+				"event": {
+					"broadcaster_user_id": "1000",
+					"broadcaster_user_login": "fixture_streamer",
+					"broadcaster_user_name": "Fixture Streamer",
+					"chatter_user_id": "1001",
+					"chatter_user_login": "fixture_viewer",
+					"chatter_user_name": "Fixture Viewer",
+					"message_id": "fixture-message-1",
+					"message": {
+						"text": "Hello Kappa",
+						"fragments": [
+							{
+								"type": "text",
+								"text": "Hello "
+							},
+							{
+								"type": "emote",
+								"text": "Kappa",
+								"emote": {
+									"id": "25",
+									"emote_set_id": "0",
+									"owner_id": "0",
+									"format": [
+										"static"
+									]
+								}
+							}
+						]
+					},
+					"badges": [
+						{
+							"set_id": "moderator",
+							"id": "1",
+							"info": ""
+						}
+					],
+					"color": "#663399",
+					"message_type": "text",
+					"cheer": null,
+					"reply": null
+				}
+			}
+		},
+		{
+			"metadata": {
+				"message_id": "fixture-twitch-member",
+				"message_type": "notification",
+				"message_timestamp": "2026-01-01T00:00:00Z",
+				"subscription_type": "channel.subscribe",
+				"subscription_version": "1"
+			},
+			"payload": {
+				"subscription": {
+					"id": "fixture-subscription",
+					"type": "channel.subscribe",
+					"version": "1",
+					"status": "enabled"
+				},
+				"event": {
+					"broadcaster_user_id": "1000",
+					"user_id": "1001",
+					"user_login": "fixture_viewer",
+					"user_name": "Fixture Viewer",
+					"tier": "1000",
+					"is_gift": false
+				}
+			}
+		},
+		{
+			"metadata": {
+				"message_id": "fixture-twitch-gift",
+				"message_type": "notification",
+				"message_timestamp": "2026-01-01T00:00:00Z",
+				"subscription_type": "channel.subscription.gift",
+				"subscription_version": "1"
+			},
+			"payload": {
+				"subscription": {
+					"id": "fixture-subscription",
+					"type": "channel.subscription.gift",
+					"version": "1",
+					"status": "enabled"
+				},
+				"event": {
+					"broadcaster_user_id": "1000",
+					"user_id": "1001",
+					"user_login": "fixture_viewer",
+					"user_name": "Fixture Viewer",
+					"total": 5,
+					"tier": "1000",
+					"cumulative_total": 5,
+					"is_anonymous": false
+				}
+			}
+		},
+		{
+			"metadata": {
+				"message_id": "fixture-twitch-delete",
+				"message_type": "notification",
+				"message_timestamp": "2026-01-01T00:00:00Z",
+				"subscription_type": "channel.chat.message_delete",
+				"subscription_version": "1"
+			},
+			"payload": {
+				"subscription": {
+					"id": "fixture-subscription",
+					"type": "channel.chat.message_delete",
+					"version": "1",
+					"status": "enabled"
+				},
+				"event": {
+					"broadcaster_user_id": "1000",
+					"target_user_id": "1001",
+					"target_user_login": "fixture_viewer",
+					"target_user_name": "Fixture Viewer",
+					"message_id": "fixture-message-1"
+				}
+			}
+		}
+	]
+}

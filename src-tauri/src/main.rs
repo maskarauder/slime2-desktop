@@ -178,6 +178,14 @@ async fn main() {
 		.manage(AppState::default())
 		.setup(|app: &mut tauri::App| {
 			log::info!("Welcome to Slime2!");
+			log::info!(
+				"Build: version={} commit={} source={} target={} profile={}",
+				app.package_info().version,
+				env!("SLIME2_BUILD_COMMIT"),
+				env!("SLIME2_BUILD_STATE"),
+				env!("SLIME2_BUILD_TARGET"),
+				env!("SLIME2_BUILD_PROFILE"),
+			);
 
 			// check if OBS browser process is running
 			let system_info = sysinfo::System::new_with_specifics(sysinfo::RefreshKind::nothing().with_processes(ProcessRefreshKind::nothing()));
@@ -229,9 +237,9 @@ async fn main() {
 			youtube::close_youtube_chat_stream,
 			server::access::get_widget_access_token,
 			commands::send_websocket_message,
-			commands::start_tiktok_live,
-			commands::stop_tiktok_live,
-			commands::lookup_tiktok_user_id,
+			commands::tiktok::start_tiktok_live,
+			commands::tiktok::stop_tiktok_live,
+			commands::tiktok::lookup_tiktok_user_id,
 			commands::copy_widget,
 			commands::delete_widget,
 			commands::install_custom_widget,
@@ -246,16 +254,16 @@ async fn main() {
 			commands::delete_widget_folder,
 			commands::load_system_fonts,
 			commands::save_temp_widget_file,
-			commands::get_secret_key,
-			commands::set_secret_key,
-			commands::delete_secret_key,
+			commands::credentials::get_secret_key,
+			commands::credentials::set_secret_key,
+			commands::credentials::delete_secret_key,
 			commands::package_custom_widget,
 			commands::save_temp_widget_core_icon,
 			commands::reveal_log_file,
 			commands::open_url,
-			commands::start_youtube_oauth,
-			commands::exchange_youtube_oauth_code,
-			commands::refresh_youtube_oauth_token,
+			commands::youtube_oauth::start_youtube_oauth,
+			commands::youtube_oauth::exchange_youtube_oauth_code,
+			commands::youtube_oauth::refresh_youtube_oauth_token,
 			commands::move_legacy_media_to_gallery,
 		])
 		.run(tauri::generate_context!())

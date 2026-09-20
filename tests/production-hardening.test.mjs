@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { loadTs } from './helpers/load-ts.mjs';
+import { fixture } from './helpers/fixtures.mjs';
 
 const tick = () => new Promise(resolve => setImmediate(resolve));
 const deferred = () => {
@@ -242,6 +243,9 @@ function sessionHarness() {
 			this.closed = true;
 			this.onclose?.();
 		}
+		frame(frame) {
+			this.onmessage?.({ data: JSON.stringify(frame) });
+		}
 		message(type, payload = {}, id = type) {
 			this.onmessage?.({
 				data: JSON.stringify({
@@ -290,21 +294,14 @@ function sessionHarness() {
 test('Twitch reconnect keeps old socket until replacement welcome and cleans up everything', async () => {
 	const h = sessionHarness();
 	await tick();
-	h.sockets[0].message('session_welcome', {
-		session: { id: 'first', keepalive_timeout_seconds: 10 },
-	});
+	const frames = fixture('twitch');
+	h.sockets[0].frame(frames.welcome);
 	await tick();
-	h.sockets[0].message('session_reconnect', {
-		session: {
-			reconnect_url: 'wss://eventsub.wss.twitch.tv/ws?session=next',
-		},
-	});
+	h.sockets[0].frame(frames.reconnect);
 	await tick();
 	assert.equal(h.sockets.length, 2);
 	assert.equal(h.sockets[0].closed, false);
-	h.sockets[1].message('session_welcome', {
-		session: { id: 'next', keepalive_timeout_seconds: 10 },
-	});
+	h.sockets[1].frame(frames.resumed);
 	await tick();
 	assert.equal(h.sockets[0].closed, true);
 	assert.equal(h.subscriptions.length, 1);
@@ -317,10 +314,11 @@ test('Twitch suppresses replay and recovers when welcome never arrives', async (
 	await tick();
 	h.sockets[0].message('session_welcome', { session: { id: 'first' } });
 	await tick();
-	h.sockets[0].message('notification', {}, 'one');
-	h.sockets[0].message('notification', {}, 'one');
+	const notification = fixture('twitch').notifications[0];
+	h.sockets[0].frame(notification);
+	h.sockets[0].frame(notification);
 	await tick();
-	assert.deepEqual(h.delivered, ['one']);
+	assert.deepEqual(h.delivered, [notification.metadata.message_id]);
 	h.session.stop();
 	const missing = sessionHarness();
 	await tick();
@@ -382,6 +380,7 @@ test('three simultaneous registrations retain all widgets and their initial acco
 	const effects = [];
 	let listener, state;
 	const sent = [];
+	const logs = [];
 	const accounts = {
 		a: {
 			id: 'a',
@@ -461,7 +460,11 @@ test('three simultaneous registrations retain all widgets and their initial acco
 				}),
 			},
 		},
-		{ console: quiet, addEventListener() {}, removeEventListener() {} },
+		{
+			console: { ...quiet, info: value => logs.push(value) },
+			addEventListener() {},
+			removeEventListener() {},
+		},
 	).default;
 	hook();
 	const cleanup = effects[0]();
@@ -470,6 +473,10 @@ test('three simultaneous registrations retain all widgets and their initial acco
 	);
 	assert.deepEqual([...state].sort(), ['left', 'right', 'vertical']);
 	assert.equal(sent.length, 3);
+	assert.equal(logs.length, 3);
+	assert(logs.every(log => log.includes('widget="Widget" version="1"')));
+	for (const id of ['left', 'right', 'vertical'])
+		assert(logs.some(log => log.includes(`id=${id}`)));
 	assert(sent.every(([, a]) => a[0].serviceId === '123'));
 	cleanup();
 });

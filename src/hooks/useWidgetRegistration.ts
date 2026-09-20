@@ -44,7 +44,7 @@ export default function useWidgetRegistration() {
 			}
 
 			console.info(
-				`${tileMeta.name}${widgetMeta.name !== tileMeta.name ? ` (${widgetMeta.name} v${widgetMeta.version})` : ''}: Widget connected`,
+				`Widget connected: id=${widgetId} tile=${JSON.stringify(tileMeta.name)} widget=${JSON.stringify(widgetMeta.name)} version=${JSON.stringify(widgetMeta.version)}`,
 			);
 
 			await sendWidgetValues(widgetId, settings, values);

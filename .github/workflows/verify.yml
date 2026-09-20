@@ -29,13 +29,7 @@ jobs:
                       src-tauri/youtube-stream -> target
                       src-tauri/native-tests -> target
             - run: npm run setup
-            - run: npm test
-            - run: npm run check
-            - run: npm run overlay:build
-            - run: npm run icon
-            - run: cargo test --locked --manifest-path src-tauri/native-tests/Cargo.toml
-            - run: cargo test --locked --manifest-path src-tauri/youtube-stream/Cargo.toml
-            - run: cargo test --locked --manifest-path src-tauri/Cargo.toml
+            - run: npm run verify -- --desktop
             - run: npm run build -- --bundles msi
             - name: Upload Windows installer
               uses: actions/upload-artifact@v7

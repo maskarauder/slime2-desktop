@@ -1,5 +1,8 @@
 # Moderator username lookup
 
+For current checkout setup and verification, see [DEVELOPMENT.md](DEVELOPMENT.md).
+The patch/ZIP instructions below describe the original incremental delivery.
+
 Apply `slime2-link-account-usernames.patch` from the repository root after the
 previous chat recovery/streamList patches. Villager Chat's shared-storage and
 compare-and-set patches remain prerequisites for saving account links. This
@@ -78,7 +81,7 @@ before using even a cached result. Unknown or ambiguous results are rejected.
   coalescing, timeouts, rate limits and safe error messages.
 - `src/helpers/services/twitch/twitchApi.ts`: exact login lookup.
 - `src/helpers/services/youtube/youtubeApi.ts`: `channels.list(forHandle=...)`.
-- `src/helpers/commands.ts`, `src-tauri/src/commands.rs`,
+- `src/helpers/commands.ts`, `src-tauri/src/commands/tiktok.rs`,
   `src-tauri/src/tiktok_lookup.rs`, `src-tauri/src/main.rs`: native Euler lookup.
 - `src/hooks/useWidgetRequest.ts`: generic widget request schema and handler.
 - `tests/platform-user-lookup.test.mjs`: resolver regression tests.

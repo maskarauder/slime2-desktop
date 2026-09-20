@@ -1,3 +1,4 @@
+import { fixture } from './helpers/fixtures.mjs';
 import axios from 'axios';
 import assert from 'node:assert/strict';
 import { getEventListeners } from 'node:events';
@@ -467,4 +468,27 @@ test('gift combos and polls update, tombstones remove, and replay stays suppress
 		forwarded[3].snippet.giftEventDetails.giftMetadata.comboCount,
 		2,
 	);
+});
+
+test('YouTube fixture batches preserve message details and suppress complete replay after reconnect', async () => {
+	const h = harness();
+	const messages = fixture('youtube').messages;
+	const forwarded = [];
+	h.options.onMessage = async message => forwarded.push(message);
+	let attempt = 0;
+	const tokens = [];
+	h.dependencies.stream = async function* (_, __, token) {
+		tokens.push(token);
+		attempt++;
+		if (attempt === 1) {
+			yield { items: messages, nextPageToken: 'fixture-next-page' };
+			throw new Error('simulated network disconnect');
+		}
+		yield { items: messages, nextPageToken: 'fixture-after-replay' };
+		h.controller.abort();
+	};
+	await h.run();
+	assert.equal(attempt, 2);
+	assert.deepEqual(tokens, [undefined, 'fixture-next-page']);
+	assert.deepEqual(forwarded, messages);
 });
