@@ -115,6 +115,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Set Arch release channel
+        run: |
+          sed -i "s/^_release_suffix=.*/_release_suffix='${VERSION_SUFFIX}'/" pkgbuild/PKGBUILD
+
       - name: Update PKGBUILD
         uses: heyhusen/archlinux-package-action@v3.0.1
         with:
@@ -122,6 +126,8 @@ jobs:
           pkgver: ${{ env.APP_VERSION }}
           pkgrel: 1
           updpkgsums: true
+          # Only update the recipe and checksums for the downloadable ZIP.
+          flags: ''
 
       - name: Create Arch Linux ZIP
         uses: thedoctor0/zip-release@0.7.6
@@ -136,4 +142,4 @@ jobs:
         with:
           release_id: ${{ env.RELEASE_ID }}
           file: ${{ env.FILE_NAME }}
-          draft: true
+          draft: false
