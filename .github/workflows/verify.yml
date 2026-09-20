@@ -37,3 +37,10 @@ jobs:
             - run: cargo test --locked --manifest-path src-tauri/youtube-stream/Cargo.toml
             - run: cargo test --locked --manifest-path src-tauri/Cargo.toml
             - run: npm run build -- --bundles msi
+            - name: Upload Windows installer
+              uses: actions/upload-artifact@v7
+              with:
+                  name: Slime2-Windows-MSI
+                  path: src-tauri/target/release/bundle/msi/*.msi
+                  if-no-files-found: error
+                  retention-days: 30
