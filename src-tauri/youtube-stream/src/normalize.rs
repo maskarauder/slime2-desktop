@@ -112,8 +112,8 @@ fn message(value: LiveChatMessage) -> Option<Value> {
 		Some(Content::PollDetails(details)) => {
 			let metadata = details.metadata.unwrap_or_default();
 			snippet["pollDetails"] = json!({
-				"status": match details.status { Some(1) => "active", Some(2) => "closed", _ => "unknown" },
 				"metadata": {
+					"status": match details.status { Some(1) => "active", Some(2) => "closed", _ => "unknown" },
 					"questionText": metadata.question_text.unwrap_or_default(),
 					"options": metadata.options.into_iter().map(|option| json!({
 						"optionText": option.option_text.unwrap_or_default(),
@@ -131,13 +131,11 @@ fn message(value: LiveChatMessage) -> Option<Value> {
 					"altText": details.alt_text.unwrap_or_default(),
 					"language": details.language.unwrap_or_default(),
 					"hasVisualEffect": details.has_visual_effect.unwrap_or_default(),
+					"comboCount": details.combo_count.unwrap_or_default(),
 				},
-				"comboCount": details.combo_count.unwrap_or_default(),
 			});
 			if let Some(duration) = details.gift_duration {
-				snippet["giftEventDetails"]["giftMetadata"]["giftDuration"] =
-					format!("{}.{:09}s", duration.seconds, duration.nanos)
-						.into();
+				snippet["giftEventDetails"]["giftMetadata"]["giftDuration"] = json!({ "seconds": duration.seconds, "nanos": duration.nanos });
 			}
 		}
 		None => {}

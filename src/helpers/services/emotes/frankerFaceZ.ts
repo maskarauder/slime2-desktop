@@ -1,8 +1,10 @@
+import { createCachedJsonGet } from '../requestCache';
 import axios from 'axios';
 
 const ffzAxios = axios.create({
 	baseURL: 'https://api.frankerfacez.com/v1',
 });
+const cachedGet = createCachedJsonGet(ffzAxios);
 
 type FfzImageUrls = {
 	// 1 is guaranteed, 2 and 4 aren't
@@ -58,32 +60,30 @@ const ffzApi = {
 	async getRoom(platform: 'twitch' | 'youtube', userId: string) {
 		const roomType = platform === 'youtube' ? 'yt' : 'id';
 		const [globalData, roomData] = await Promise.all([
-			ffzAxios
-				.get<{
-					default_sets: number[];
-					sets: FfzSets;
-				}>('/set/global')
+			cachedGet<{
+				default_sets: number[];
+				sets: FfzSets;
+			}>('/set/global')
 				.then(response => response.data)
 				.catch(() => null),
-			ffzAxios
-				.get<{
-					room: {
-						_id: number; // ffz user id
-						twitch_id: number;
-						youtube_id: string | null;
-						id: string; // platform username
-						is_group: boolean;
-						display_name: string | null; // platform display name
-						set: number;
-						moderator_badge: string | null;
-						vip_badge: FfzImageUrls | null;
-						mod_urls: FfzImageUrls | null;
-						user_badges: Record<string, string[]>;
-						user_badge_ids: Record<string, number[]>;
-						css: string | null;
-					};
-					sets: FfzSets;
-				}>(`/room/${roomType}/${userId}`)
+			cachedGet<{
+				room: {
+					_id: number; // ffz user id
+					twitch_id: number;
+					youtube_id: string | null;
+					id: string; // platform username
+					is_group: boolean;
+					display_name: string | null; // platform display name
+					set: number;
+					moderator_badge: string | null;
+					vip_badge: FfzImageUrls | null;
+					mod_urls: FfzImageUrls | null;
+					user_badges: Record<string, string[]>;
+					user_badge_ids: Record<string, number[]>;
+					css: string | null;
+				};
+				sets: FfzSets;
+			}>(`/room/${roomType}/${userId}`)
 				.then(response => response.data)
 				.catch(() => null),
 		]);
@@ -102,16 +102,18 @@ const ffzApi = {
 			mod_urls: room?.mod_urls ?? null,
 			user_badges: room?.user_badges ?? {},
 			user_badge_ids: room?.user_badge_ids ?? {},
-			emotes: [...globalEmotes, ...(roomSet?.emoticons ?? [])].map(emote => {
-				return {
-					id: emote.id,
-					name: emote.name,
-					height: emote.height,
-					width: emote.width,
-					urls: emote.urls,
-					animated: emote.animated,
-				};
-			}),
+			emotes: [...globalEmotes, ...(roomSet?.emoticons ?? [])].map(
+				emote => {
+					return {
+						id: emote.id,
+						name: emote.name,
+						height: emote.height,
+						width: emote.width,
+						urls: emote.urls,
+						animated: emote.animated,
+					};
+				},
+			),
 		};
 	},
 };

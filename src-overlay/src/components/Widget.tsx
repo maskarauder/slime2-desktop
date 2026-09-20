@@ -5,8 +5,8 @@ import useSlime2Websocket from '../hooks/useSlime2Websocket';
 
 export default function Widget() {
 	const { html, dark } = useLoaderData({ from: '/$' });
-	useMetaLoader();
-	useSlime2Websocket();
+	const ready = useMetaLoader();
+	useSlime2Websocket(ready);
 
 	useEffect(() => {
 		document.body.classList.toggle('dark', dark);

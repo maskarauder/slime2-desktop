@@ -323,6 +323,10 @@ fn normalizes_payment_membership_moderation_sticker_gift_and_poll_events() {
 			DisplayedContent::GiftDetails(LiveChatGiftDetails {
 				gift_name: Some("Gift".into()),
 				combo_count: Some(3),
+				gift_duration: Some(prost_types::Duration {
+					seconds: 3,
+					nanos: 500_000_000,
+				}),
 				..Default::default()
 			}),
 		),
@@ -352,10 +356,16 @@ fn normalizes_payment_membership_moderation_sticker_gift_and_poll_events() {
 			assert_eq!(snippet[details]["banDurationSeconds"], "300");
 		}
 		if code == 20 {
-			assert_eq!(snippet[details]["status"], "active");
+			assert_eq!(snippet[details]["metadata"]["status"], "active");
 		}
 		if code == 21 {
 			assert_eq!(snippet[details]["giftMetadata"]["giftName"], "Gift");
+			assert_eq!(snippet[details]["giftMetadata"]["comboCount"], 3);
+			assert_eq!(
+				snippet[details]["giftMetadata"]["giftDuration"],
+				serde_json::json!({"seconds":3,"nanos":500_000_000})
+			);
+			assert!(snippet[details].get("comboCount").is_none());
 		}
 	}
 }

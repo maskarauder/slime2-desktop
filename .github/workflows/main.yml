@@ -69,7 +69,13 @@ jobs:
           workspaces: './src-tauri -> target'
 
       - name: NPM Install Frontend Dependencies
-        run: npm install
+        run: npm run setup
+
+      - name: Regression tests
+        run: npm test
+
+      - name: Transport tests
+        run: cargo test --locked --manifest-path src-tauri/native-tests/Cargo.toml
 
       - name: Tauri Info
         run: npm run tauri info

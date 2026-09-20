@@ -1,142 +1,145 @@
-//? Custom slime2 websocket commands
-// Tauri commands found under commands.rs
-
-use crate::get_app_handle;
-
 use super::{WebsocketConnection, WebsocketConnections};
+use crate::get_app_handle;
 use futures::stream::SplitSink;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
-use tauri::{Emitter, EventTarget};
+use std::{
+	collections::{HashMap, HashSet},
+	sync::Arc,
+};
+use tauri::{Emitter, EventTarget, Manager};
 use warp::filters::ws::{Message, WebSocket};
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Deserialize)]
 pub struct Command {
 	pub r#type: String,
 	pub data: CommandData,
 }
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Deserialize)]
 #[serde(untagged)]
 pub enum CommandData {
 	Register(RegisterData),
 	Request(RequestData),
 	Heartbeat(HeartbeatData),
 }
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Deserialize)]
 pub struct RegisterData {
 	id: String,
+	#[serde(default)]
+	token: String,
+	#[serde(default)]
 	channels: HashSet<String>,
 }
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct RequestData {
 	widget_id: String,
 	request_id: String,
 	request_type: String,
 	payload: HashMap<String, serde_json::Value>,
 }
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Deserialize)]
 pub struct HeartbeatData {
 	widget_id: String,
 	timestamp: u64,
 }
 
-#[derive(Clone, Serialize)]
-struct RegisterPayload {
-	id: String,
-}
-
 pub async fn register(
-	command_data: CommandData,
-	connection_id: usize,
-	websocket_sender: SplitSink<WebSocket, Message>,
+	data: CommandData,
+	id: usize,
+	sink: SplitSink<WebSocket, Message>,
 	connections: &WebsocketConnections,
-) -> Result<(), String> {
-	let CommandData::Register(register_data) = command_data else {
-		// unexpected registration data
-		return Err(String::from("Register command is incorrectly formatted!"));
+) -> Result<Arc<WebsocketConnection>, String> {
+	let CommandData::Register(data) = data else {
+		return Err("Invalid widget registration.".into());
 	};
-
-	let mut channels: HashSet<String> = HashSet::new();
-
-	// prefix channel names to prevent collision with widget_id channel
-	for channel in register_data.channels.iter() {
-		channels.insert(format!("channel_{}", channel));
+	let app = get_app_handle();
+	if !app
+		.state::<crate::server::access::WidgetAccess>()
+		.authorize(app, &data.id, &data.token)
+	{
+		return Err("Widget authentication failed. Copy its current Overlay URL from Slime2.".into());
 	}
-
-	// add widget id as a channel for widget-specific data
-	channels.insert(format!("widget_{}", register_data.id));
-
-	if let Err(error) = get_app_handle().emit_to(
+	let json = crate::file::load_json(
+		crate::file::tiles_path(app)
+			.join(&data.id)
+			.join("core/config/meta"),
+	)
+	.map_err(|_| "Widget metadata unavailable.")?;
+	let meta: serde_json::Value =
+		serde_json::from_str(&json).map_err(|_| "Invalid widget metadata.")?;
+	let allowed = meta.get("channels").and_then(|v| v.as_array());
+	if data.channels.len() > 32
+		|| data.channels.iter().any(|channel| {
+			channel.len() > 120
+				|| !allowed.is_some_and(|values| {
+					values
+						.iter()
+						.any(|value| value.as_str() == Some(channel.as_str()))
+				})
+		}) {
+		return Err("Widget requested undeclared channels.".into());
+	}
+	let mut channels: HashSet<String> = data
+		.channels
+		.into_iter()
+		.map(|channel| format!("channel_{channel}"))
+		.collect();
+	channels.insert(format!("widget_{}", data.id));
+	let connection = Arc::new(WebsocketConnection::new(
+		id,
+		data.id.clone(),
+		sink,
+		channels,
+	));
+	connections.write().await.push(connection.clone());
+	connection.send_direct(
+		&serde_json::json!({"widgetId":data.id,"type":"registered","data":{}})
+			.to_string(),
+	)?;
+	app.emit_to(
 		EventTarget::webview_window("main"),
 		"websocket-registration",
-		RegisterPayload {
-			id: register_data.id,
-		},
-	) {
-		return Err(format!(
-			"Error emitting websocket-registration event: {}",
-			error
-		));
-	};
-
-	// register connection, can now send websocket messages to this connection
-	connections.write().await.push(
-		WebsocketConnection::new(connection_id, websocket_sender, channels)
-			.into(),
-	);
-
-	Ok(())
+		serde_json::json!({"id": data.id}),
+	)
+	.map_err(|_| "Unable to notify app of widget registration.")?;
+	Ok(connection)
 }
 
-pub fn request(command_data: CommandData) -> Result<(), String> {
-	let CommandData::Request(request_data) = command_data else {
-		return Err(String::from("Request command is incorrectly formatted!"));
-	};
-
-	if let Err(error) = get_app_handle().emit_to(
-		EventTarget::webview_window("main"),
-		"websocket-request",
-		request_data.clone(),
-	) {
-		return Err(format!(
-			"Error emitting websocket-request event: {}",
-			error
-		));
-	}
-
-	Ok(())
-}
-
-pub async fn heartbeat(
-	command_data: CommandData,
-	connection_id: usize,
-	connections: &WebsocketConnections,
+pub fn request(
+	data: CommandData,
+	connection: &WebsocketConnection,
 ) -> Result<(), String> {
-	let CommandData::Heartbeat(heartbeat_data) = command_data else {
-		return Err(String::from("Heartbeat command is incorrectly formatted!"));
+	let CommandData::Request(data) = data else {
+		return Err("Invalid widget request.".into());
 	};
+	if data.widget_id != connection.widget_id {
+		return Err(
+			"Widget request identity does not match its connection.".into()
+		);
+	}
+	if data.request_type.len() > 100 {
+		return Err("Invalid widget request type.".into());
+	}
+	connection.begin_request(&data.request_id)?;
+	get_app_handle()
+		.emit_to(
+			EventTarget::webview_window("main"),
+			"websocket-request",
+			data,
+		)
+		.map_err(|_| "Unable to forward widget request.".into())
+}
 
-	let message = serde_json::json!({
-		"widgetId": heartbeat_data.widget_id,
-		"type": "heartbeat",
-		"data": { "timestamp": heartbeat_data.timestamp },
-	})
-	.to_string();
-
-	let connections_read_guard = connections.read().await;
-	let Some(connection) = connections_read_guard
-		.iter()
-		.find(|connection| connection.id == connection_id)
-	else {
-		return Err(format!(
-			"Heartbeat connection (ID: {}) is no longer registered!",
-			connection_id
-		));
+pub fn heartbeat(
+	data: CommandData,
+	connection: &WebsocketConnection,
+) -> Result<(), String> {
+	let CommandData::Heartbeat(data) = data else {
+		return Err("Invalid widget heartbeat.".into());
 	};
-
-	connection.send_direct(&message)
+	if data.widget_id != connection.widget_id {
+		return Err(
+			"Widget heartbeat identity does not match its connection.".into()
+		);
+	}
+	connection.send_direct(&serde_json::json!({"widgetId":data.widget_id,"type":"heartbeat","data":{"timestamp":data.timestamp}}).to_string())
 }

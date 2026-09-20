@@ -89,9 +89,19 @@ export type YouTubeLiveChatMessage = {
 			gifterChannelId: string;
 			associatedMembershipGiftingMessageId: string;
 		};
+		pollDetails?: {
+			metadata: {
+				status?: 'active' | 'closed' | 'unknown';
+				questionText?: string;
+				options?: { optionText: string; tally: string }[];
+			};
+		};
 		giftEventDetails?: {
 			giftMetadata: {
 				jewelsAmount: number;
+				comboCount?: number;
+				giftDuration?: { seconds: number; nanos: number };
+				hasVisualEffect?: boolean;
 				giftName: string;
 				giftUrl: string;
 				altText: string;
@@ -111,4 +121,5 @@ export type YouTubeLiveChatMessageListResponse =
 	YouTubeListResponse<YouTubeLiveChatMessage> & {
 		pollingIntervalMillis?: number;
 		offlineAt?: string;
+		activePollItem?: YouTubeLiveChatMessage;
 	};

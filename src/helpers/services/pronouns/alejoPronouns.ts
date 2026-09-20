@@ -1,6 +1,7 @@
 import axios from 'axios';
 
 const alejoPronounsAxios = axios.create({
+	timeout: 1500,
 	baseURL: 'https://api.pronouns.alejo.io/v1',
 });
 
@@ -22,7 +23,9 @@ const alejoPronounsApi = {
 		const primary = pronounsDataMap[pronoun_id];
 		if (!primary) return null;
 
-		const secondary = alt_pronoun_id ? pronounsDataMap[alt_pronoun_id] : null;
+		const secondary = alt_pronoun_id
+			? pronounsDataMap[alt_pronoun_id]
+			: null;
 
 		const pronouns = !secondary
 			? primary.singular
@@ -44,9 +47,9 @@ const pronounsDataMap: Record<
 		subject: string; // for "She/Her", this is "She"
 		object: string; // for "She/Her", this is "Her"
 		/**
-		 * If this is true, and the user has this as their pronoun_id, and has no
-		 * alt_pronoun_id, then only display the subject (for example "Any" instead
-		 * of "Any/Any")
+		 * If this is true, and the user has this as their pronoun_id, and has
+		 * no alt_pronoun_id, then only display the subject (for example "Any"
+		 * instead of "Any/Any")
 		 */
 		singular: boolean;
 	}
@@ -54,7 +57,12 @@ const pronounsDataMap: Record<
 	aeaer: { name: 'aeaer', subject: 'Ae', object: 'Aer', singular: false },
 	any: { name: 'any', subject: 'Any', object: 'Any', singular: true },
 	eem: { name: 'eem', subject: 'E', object: 'Em', singular: false },
-	faefaer: { name: 'faefaer', subject: 'Fae', object: 'Faer', singular: false },
+	faefaer: {
+		name: 'faefaer',
+		subject: 'Fae',
+		object: 'Faer',
+		singular: false,
+	},
 	hehim: { name: 'hehim', subject: 'He', object: 'Him', singular: false },
 	itits: { name: 'itits', subject: 'It', object: 'Its', singular: false },
 	other: { name: 'other', subject: 'Other', object: 'Other', singular: true },

@@ -12,12 +12,16 @@ export async function sendWebsocketMessage(
 export async function startTikTokLive(
 	accountId: string,
 	uniqueId: string,
+	sessionId: string,
 ): Promise<void> {
-	return invoke('start_tiktok_live', { accountId, uniqueId });
+	return invoke('start_tiktok_live', { accountId, uniqueId, sessionId });
 }
 
-export async function stopTikTokLive(accountId: string): Promise<void> {
-	return invoke('stop_tiktok_live', { accountId });
+export async function stopTikTokLive(
+	accountId: string,
+	sessionId: string,
+): Promise<void> {
+	return invoke('stop_tiktok_live', { accountId, sessionId });
 }
 
 export async function lookupTikTokUserId(
@@ -211,4 +215,8 @@ export async function refreshYouTubeOAuthToken(
 		clientSecret,
 		refreshToken,
 	});
+}
+
+export async function getWidgetAccessToken(widgetId: string): Promise<string> {
+	return invoke('get_widget_access_token', { widgetId });
 }

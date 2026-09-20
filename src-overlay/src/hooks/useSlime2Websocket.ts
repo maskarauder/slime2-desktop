@@ -21,7 +21,7 @@ type ResponseEventData = z.infer<typeof ResponseEventData>;
 const HEARTBEAT_INTERVAL_MS = 15 * 1000;
 const HEARTBEAT_TIMEOUT_MS = 10 * 1000;
 
-export default function useSlime2Websocket() {
+export default function useSlime2Websocket(ready = true) {
 	const websocketRef = useRef<WebSocket>(null);
 	const requestMapRef = useRef(
 		new Map<string, [(value: any) => void, (reason?: any) => void]>(),
@@ -32,6 +32,10 @@ export default function useSlime2Websocket() {
 	const heartbeatIntervalRef = useRef<number>(null);
 	const heartbeatTimeoutRef = useRef<number>(null);
 	const heartbeatPendingRef = useRef(false);
+	const registeredRef = useRef(false);
+	const mountedRef = useRef(false);
+	const registrationTimerRef = useRef<number>(null);
+	const waitingRef = useRef(0);
 
 	const { widgetId } = useLoaderData({ from: '/$' });
 	globalThis.slime2.widgetId = widgetId;
@@ -99,22 +103,34 @@ export default function useSlime2Websocket() {
 			return;
 		}
 
+		const token = new URLSearchParams(location.hash.slice(1)).get('token');
+		if (!token) {
+			console.error(
+				'This overlay URL needs an access token. Copy a new OBS URL from Slime2.',
+			);
+			return;
+		}
+		registeredRef.current = false;
 		const websocket = new WebSocket(WEBSOCKET_BASE_URL);
 		websocketRef.current = websocket;
+		registrationTimerRef.current = setTimeout(() => websocket.close(), 10000);
 
 		async function waitForWebsocketOpen() {
 			return new Promise<void>((resolve, reject) => {
-				if (websocket.readyState === WebSocket.OPEN) {
+				if (websocket.readyState === WebSocket.OPEN && registeredRef.current) {
 					resolve();
 					return;
 				}
-				if (websocket.readyState !== WebSocket.CONNECTING) {
+				if (
+					websocket.readyState !== WebSocket.CONNECTING &&
+					websocket.readyState !== WebSocket.OPEN
+				) {
 					reject(new Error('Slime2 is disconnected.'));
 					return;
 				}
 				function cleanup() {
 					clearTimeout(timer);
-					websocket.removeEventListener('open', onOpen);
+					removeEventListener('slime2:connected', onOpen);
 					websocket.removeEventListener('close', onClose);
 				}
 				function onOpen() {
@@ -129,7 +145,7 @@ export default function useSlime2Websocket() {
 					cleanup();
 					reject(new Error('Timed out connecting to Slime2.'));
 				}, 10000);
-				websocket.addEventListener('open', onOpen);
+				addEventListener('slime2:connected', onOpen);
 				websocket.addEventListener('close', onClose);
 			});
 		}
@@ -156,8 +172,15 @@ export default function useSlime2Websocket() {
 
 			const requestId = `${requestType}_${nanoid()}_${Date.now()}`;
 
-			await waitForWebsocketOpen();
-			if (requestMapRef.current.size >= 1000) {
+			if (waitingRef.current + requestMapRef.current.size >= 64)
+				throw new Error('Too many pending Slime2 widget requests.');
+			waitingRef.current++;
+			try {
+				await waitForWebsocketOpen();
+			} finally {
+				waitingRef.current--;
+			}
+			if (requestMapRef.current.size >= 64) {
 				throw new Error('Too many pending Slime2 widget requests.');
 			}
 			return new Promise((resolve, reject) => {
@@ -189,6 +212,13 @@ export default function useSlime2Websocket() {
 					},
 				});
 				try {
+					if (
+						message.length > 512 * 1024 ||
+						websocket.bufferedAmount > 1024 * 1024
+					)
+						throw new Error(
+							'Slime2 widget request exceeds the connection budget.',
+						);
 					websocket.send(message);
 				} catch (error) {
 					cleanup();
@@ -199,18 +229,15 @@ export default function useSlime2Websocket() {
 
 		// send registration message to slime2 upon open connection
 		websocket.onopen = () => {
-			connectAttemptRef.current = 0;
-			console.info('Connected to Slime2!');
-
 			const message = JSON.stringify({
 				type: 'register',
 				data: {
 					id: widgetId,
+					token,
 					channels: [],
 				},
 			});
 			websocket.send(message);
-			startHeartbeat(websocket);
 		};
 
 		// listen to websocket messages from slime2 to widget
@@ -220,7 +247,17 @@ export default function useSlime2Websocket() {
 					JSON.parse(messageEvent.data),
 				);
 
-				if (type === 'widget-response') {
+				if (websocketRef.current !== websocket) return;
+				if (type === 'registered') {
+					if (registeredRef.current) return;
+					registeredRef.current = true;
+					clearTimeout(registrationTimerRef.current ?? undefined);
+					registrationTimerRef.current = null;
+					connectAttemptRef.current = 0;
+					startHeartbeat(websocket);
+					dispatchEvent(new CustomEvent('slime2:connected'));
+					console.info('Connected to Slime2!');
+				} else if (type === 'widget-response') {
 					// resolve the request promise from the widget
 					try {
 						const { request_id, response } = ResponseEventData.parse(data);
@@ -294,12 +331,16 @@ export default function useSlime2Websocket() {
 
 		websocket.onclose = event => {
 			if (websocketRef.current !== websocket) return;
+			registeredRef.current = false;
+			clearTimeout(registrationTimerRef.current ?? undefined);
+			registrationTimerRef.current = null;
 			stopHeartbeat();
+			dispatchEvent(new CustomEvent('slime2:disconnected'));
 			for (const [, reject] of requestMapRef.current.values()) {
 				reject(new Error('Slime2 disconnected during the request.'));
 			}
 			requestMapRef.current.clear();
-			if (event.code !== 3000) reconnect();
+			if (event.code !== 3000 && mountedRef.current) reconnect();
 		};
 	}, [widgetId]);
 
@@ -327,20 +368,27 @@ export default function useSlime2Websocket() {
 		);
 
 		reconnectTimerRef.current = setTimeout(() => {
-			connect();
 			reconnectTimerRef.current = null;
+			if (mountedRef.current) connect();
 		}, reconnectDelay);
 	}, [connect]);
 
 	useEffect(() => {
+		if (!ready) return;
+		mountedRef.current = true;
 		connect();
 
 		return () => {
+			mountedRef.current = false;
 			clearTimeout(reconnectTimerRef.current ?? undefined);
+			reconnectTimerRef.current = null;
+			clearTimeout(registrationTimerRef.current ?? undefined);
 			stopHeartbeat();
 
 			websocketRef.current?.close(3000, 'Component Unmounted');
-			globalThis.slime2.request = async () => null;
+			globalThis.slime2.request = async () => {
+				throw new Error('Slime2 is disconnected.');
+			};
 		};
-	}, [connect]);
+	}, [connect, ready]);
 }

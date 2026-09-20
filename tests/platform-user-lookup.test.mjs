@@ -1,3 +1,5 @@
+import { loadTs } from './helpers/load-ts.mjs';
+const routing = loadTs('src/helpers/accountRouting.ts');
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
@@ -72,6 +74,7 @@ function harness(options = {}) {
 		},
 		require: name =>
 			({
+				'../accountRouting': routing,
 				'../commands': {
 					lookupTikTokUserId: (...args) => record('tiktok', ...args),
 				},

@@ -16,11 +16,41 @@ declare module '@tanstack/react-router' {
 	}
 }
 
+let bootRequests = 0;
+const bootRequest: typeof globalThis.slime2.request = async (
+	...args: any[]
+) => {
+	if (bootRequests >= 64)
+		throw new Error('Too many pending Slime2 widget requests.');
+	bootRequests++;
+	try {
+		await new Promise<void>((resolve, reject) => {
+			const timer = setTimeout(
+				() => finish(new Error('Slime2 is not connected.')),
+				15000,
+			);
+			function finish(error?: Error) {
+				clearTimeout(timer);
+				removeEventListener('slime2:connected', connected);
+				if (error) reject(error);
+				else resolve();
+			}
+			function connected() {
+				finish();
+			}
+			addEventListener('slime2:connected', connected);
+		});
+		return (
+			globalThis.slime2.request as (...values: any[]) => Promise<unknown>
+		)(...args);
+	} finally {
+		bootRequests--;
+	}
+};
+
 // Setup slime2 global var for the widget to use
 globalThis.slime2 = {
-	async request() {
-		return null;
-	},
+	request: bootRequest,
 	widgetId: null,
 };
 

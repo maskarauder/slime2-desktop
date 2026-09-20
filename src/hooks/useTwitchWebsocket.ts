@@ -2,561 +2,233 @@ import useAccounts from '@/contexts/accounts/useAccounts';
 import { useAccountsDispatch } from '@/contexts/accounts/useAccountsDispatch';
 import { useEventsLogDispatch } from '@/contexts/events_log/useEventsLogDispatch';
 import useWidgetMetas from '@/contexts/widget_metas/useWidgetMetas';
-import { deleteTokens, type Account } from '@/helpers/json/accounts';
-import twitchApi, {
-	createEventSubParamsList,
-} from '@/helpers/services/twitch/twitchApi';
-import twitchAuth from '@/helpers/services/twitch/twitchAuth';
+import { relatedWidgetIds } from '@/helpers/accountRouting';
+import { getEventLogId } from '@/helpers/json/eventsLog';
+import twitchAuth, {
+	TwitchReauthorizationError,
+} from '@/helpers/services/twitch/twitchAuth';
+import { startTwitchSession } from '@/helpers/services/twitch/twitchSession';
 import { sendTwitchEvent } from '@/helpers/widgetMessage';
-import { getEventLogId } from '@@/json/eventsLog';
+import { safeLogText } from '@/helpers/safeLog';
 import { useEffect, useRef } from 'react';
 
-const TWITCH_WEBSOCKET_URL = 'wss://eventsub.wss.twitch.tv/ws';
-
 export default function useTwitchWebsocket() {
-	const widgetMetas = useWidgetMetas();
 	const accounts = useAccounts();
+	const widgetMetas = useWidgetMetas();
 	const { addAccount: updateAccount } = useAccountsDispatch();
 	const { logEvent } = useEventsLogDispatch();
-
-	const twitchWebsockets = useRef(new Map<string, WebSocket | 'connecting'>());
-	const twitchReconnectTimers = useRef(new Map<string, number>());
-	const twitchReconnectAttempts = useRef(new Map<string, number>());
-
-	// necessary to get the updated account data within functions
-	const accountsRef = useRef(accounts);
-
-	useEffect(() => {
-		accountsRef.current = accounts;
-	}, [accounts]);
-
-	function getAccount(accountId: string): Account | undefined {
-		return accountsRef.current[accountId];
+	const latest = useRef({ accounts, widgetMetas, updateAccount, logEvent });
+	latest.current = { accounts, widgetMetas, updateAccount, logEvent };
+	const sessions = useRef(new Map<string, { stop: () => void }>());
+	function reauthorize(id: string) {
+		const account = latest.current.accounts[id];
+		if (account && !account.reauthorize)
+			latest.current.updateAccount({ ...account, reauthorize: true });
 	}
-
-	// necesary to get updated widget metas within functions
-	const widgetMetasRef = useRef(widgetMetas);
-
-	useEffect(() => {
-		widgetMetasRef.current = widgetMetas;
-	}, [widgetMetas]);
-
-	function getWidgetMetas() {
-		return widgetMetasRef.current;
-	}
-
-	function scheduleTwitchReconnect(
-		twitchReadAccountId: string,
-		reconnectUrl?: string,
+	async function notification(
+		id: string,
+		notificationMessage: Twitch.WebsocketMessage.Notification,
 	) {
-		const account = getAccount(twitchReadAccountId);
+		const account = latest.current.accounts[id];
 		if (!account || account.reauthorize) return;
-		if (twitchReconnectTimers.current.has(twitchReadAccountId)) return;
-
-		const attempt = twitchReconnectAttempts.current.get(twitchReadAccountId) ?? 0;
-		const baseDelay = reconnectUrl
-			? 0
-			: Math.min(1000 * 2 ** attempt, 30 * 1000);
-		const deviation = reconnectUrl ? 0 : Math.random() * 1000 - 500;
-		const delay = Math.max(0, Math.floor(baseDelay + deviation));
-
-		twitchReconnectAttempts.current.set(twitchReadAccountId, attempt + 1);
-		console.warn(
-			'Reconnecting Twitch Websocket:',
-			account.displayName,
-			'reconnect attempt',
-			attempt + 1,
-			'in',
-			delay,
-			'milliseconds.',
+		const related = relatedWidgetIds(
+			account,
+			latest.current.accounts,
+			latest.current.widgetMetas,
 		);
+		const { subscription_type, message_timestamp: timestamp } =
+			notificationMessage.metadata;
+		const { event } = notificationMessage.payload;
+		const eventLogId = getEventLogId(account);
+		const logEvent = latest.current.logEvent;
+		switch (subscription_type) {
+			case 'channel.follow': {
+				const followEvent = event as Twitch.WebsocketEvent.Follow;
+				logEvent(eventLogId, {
+					type: 'follow',
+					timestamp,
+					data: {
+						user_id: followEvent.user_id,
+						user_login: followEvent.user_login,
+						user_name: followEvent.user_name,
+					},
+				});
+				break;
+			}
 
-		const timer = window.setTimeout(() => {
-			twitchReconnectTimers.current.delete(twitchReadAccountId);
-			void connectTwitchWebsocket(twitchReadAccountId, reconnectUrl);
-		}, delay);
-		twitchReconnectTimers.current.set(twitchReadAccountId, timer);
+			case 'channel.subscribe': {
+				const subEvent = event as Twitch.WebsocketEvent.Subscribe;
+
+				// don't log individual subs from a gift sub
+				if (!subEvent.is_gift) {
+					logEvent(eventLogId, {
+						type: 'sub',
+						timestamp,
+						data: {
+							user_id: subEvent.user_id,
+							user_login: subEvent.user_login,
+							user_name: subEvent.user_name,
+							tier: subEvent.tier,
+						},
+					});
+				}
+				break;
+			}
+
+			case 'channel.subscription.message': {
+				const resubEvent =
+					event as Twitch.WebsocketEvent.SubscriptionMessage;
+
+				logEvent(eventLogId, {
+					type: 'resub',
+					timestamp,
+					data: {
+						user_id: resubEvent.user_id,
+						user_login: resubEvent.user_login,
+						user_name: resubEvent.user_name,
+						tier: resubEvent.tier,
+						cumulative_months: resubEvent.cumulative_months,
+						streak_months: resubEvent.streak_months,
+					},
+				});
+				break;
+			}
+
+			case 'channel.subscription.gift': {
+				const subGiftEvent =
+					event as Twitch.WebsocketEvent.SubscriptionGift;
+
+				logEvent(eventLogId, {
+					type: 'sub_gift',
+					timestamp,
+					data: {
+						user_id: subGiftEvent.user_id,
+						user_login: subGiftEvent.user_login,
+						user_name: subGiftEvent.user_name,
+						is_anonymous: subGiftEvent.is_anonymous,
+						tier: subGiftEvent.tier,
+						total: subGiftEvent.total,
+						cumulative_total: subGiftEvent.cumulative_total,
+					},
+				});
+				break;
+			}
+
+			case 'channel.raid': {
+				const raidEvent = event as Twitch.WebsocketEvent.Raid;
+				logEvent(eventLogId, {
+					type: 'raid',
+					timestamp,
+					data: {
+						user_id: raidEvent.from_broadcaster_user_id,
+						user_login: raidEvent.from_broadcaster_user_login,
+						user_name: raidEvent.from_broadcaster_user_name,
+						viewers: raidEvent.viewers,
+					},
+				});
+
+				break;
+			}
+
+			case 'channel.cheer': {
+				const cheerEvent = event as Twitch.WebsocketEvent.Cheer;
+				logEvent(eventLogId, {
+					type: 'cheer',
+					timestamp,
+					data: {
+						user_id: cheerEvent.user_id,
+						user_login: cheerEvent.user_login,
+						user_name: cheerEvent.user_name,
+						bits: cheerEvent.bits,
+					},
+				});
+
+				break;
+			}
+		}
+		await Promise.all(
+			related.map(widgetId =>
+				sendTwitchEvent(
+					account.id,
+					widgetId,
+					notificationMessage.metadata.message_id,
+					subscription_type,
+					notificationMessage.metadata.subscription_version,
+					timestamp,
+					event,
+				),
+			),
+		);
 	}
-
-	async function connectTwitchWebsocket(
-		twitchReadAccountId: string,
-		reconnectUrl?: string,
-	) {
-		const account = getAccount(twitchReadAccountId);
-		if (!account) return;
-
-		const existingWebsocket = twitchWebsockets.current.get(account.id);
-		if (
-			existingWebsocket === 'connecting' ||
-			(existingWebsocket &&
-				(existingWebsocket.readyState === WebSocket.OPEN ||
-					existingWebsocket.readyState === WebSocket.CONNECTING))
-		) {
-			return;
-		}
-
-		console.info(
-			'Account registered to read Twitch events:',
-			account.displayName,
+	useEffect(() => {
+		const needed = Object.values(accounts).filter(
+			account =>
+				!account.reauthorize &&
+				account.service === 'twitch' &&
+				account.type === 'read' &&
+				relatedWidgetIds(account, accounts, widgetMetas).length,
 		);
-
-		twitchWebsockets.current.set(account.id, 'connecting');
-
-		// A reconnect URL carries the existing Twitch subscriptions over to the
-		// new socket. Removing them here would disable them before the new socket
-		// receives its welcome message.
-		if (!reconnectUrl) {
+		const ids = new Set(needed.map(account => account.id));
+		for (const [id, session] of sessions.current)
+			if (!ids.has(id)) {
+				session.stop();
+				sessions.current.delete(id);
+			}
+		for (const account of needed) {
+			if (sessions.current.has(account.id)) continue;
+			sessions.current.set(
+				account.id,
+				startTwitchSession({
+					account,
+					onNotification: message =>
+						notification(account.id, message),
+					onReauthorize: () => reauthorize(account.id),
+				}),
+			);
+		}
+	}, [accounts, widgetMetas]);
+	// Validate on startup and during quiet chats; failures are retried without deleting credentials.
+	useEffect(() => {
+		let disposed = false;
+		let running = false;
+		async function validate() {
+			if (running || disposed) return;
+			running = true;
 			try {
-				await removeExistingEventSubs(account.id);
-			} catch (error) {
-				console.error(
-					'Unable to clean up Twitch EventSub subscriptions before connecting:',
-					account.displayName,
-					error,
-				);
-				twitchWebsockets.current.delete(account.id);
-				scheduleTwitchReconnect(account.id);
-				return;
-			}
-		}
-
-		let websocket: WebSocket;
-		try {
-			websocket = new WebSocket(reconnectUrl ?? TWITCH_WEBSOCKET_URL);
-		} catch (error) {
-			console.error(
-				'Unable to open Twitch Websocket:',
-				account.displayName,
-				error,
-			);
-			twitchWebsockets.current.delete(account.id);
-			scheduleTwitchReconnect(account.id);
-			return;
-		}
-		twitchWebsockets.current.set(account.id, websocket);
-
-		let connectionLostTimer: number | null = null;
-		let keepAliveTimeoutSeconds: number | null = null;
-		let suppressReconnect = false;
-
-		const isCurrentWebsocket = () =>
-			twitchWebsockets.current.get(account.id) === websocket;
-
-		const disconnectTwitchWebsocket = () => {
-			const account = getAccount(twitchReadAccountId);
-			clearConnectionLostTimer();
-			websocket.close();
-			if (account && isCurrentWebsocket()) {
-				twitchWebsockets.current.delete(account.id);
-			}
-		};
-
-		// clear out the existing timer
-		const clearConnectionLostTimer = () => {
-			if (connectionLostTimer) {
-				clearTimeout(connectionLostTimer);
-				connectionLostTimer = null;
-			}
-		};
-
-		// start/restart timer
-		const startConnectionLostTimer = () => {
-			const account = getAccount(twitchReadAccountId);
-			clearConnectionLostTimer();
-
-			if (keepAliveTimeoutSeconds) {
-				connectionLostTimer = setTimeout(() => {
-					// connection has been lost, disconnect and create a new connection
-					console.warn(
-						'Account lost connection to Twitch Websocket, reconnecting:',
-						account?.displayName,
-					);
-					suppressReconnect = true;
-					disconnectTwitchWebsocket();
-					if (account) {
-						scheduleTwitchReconnect(account.id);
-					}
-
-					// 1200 instead of 1000 to allow extra time
-				}, keepAliveTimeoutSeconds * 1200);
-			}
-		};
-
-		// disconnect and set account to need reauthorization
-		const reauthorizationNeeded = () => {
-			const account = getAccount(twitchReadAccountId);
-			console.error(
-				'Twitch account requires reauthorization:',
-				account?.displayName,
-			);
-			suppressReconnect = true;
-			clearConnectionLostTimer();
-			disconnectTwitchWebsocket();
-			if (account) {
-				updateAccount({ ...account, reauthorize: true });
-				deleteTokens(account.id);
-			}
-		};
-
-		websocket.addEventListener('message', async (message: MessageEvent) => {
-			const account = getAccount(twitchReadAccountId);
-			if (!account) return;
-
-			const twitchMessage: Twitch.WebsocketMessage.Any = JSON.parse(
-				message.data,
-			);
-			console.debug(
-				'[Twitch Websocket]',
-				twitchMessage.metadata.message_type,
-				'[Account]',
-				account.displayName,
-			);
-
-			switch (twitchMessage.metadata.message_type) {
-				// https://dev.twitch.tv/docs/eventsub/handling-websocket-events/#welcome-message
-				case 'session_welcome': {
+				for (const account of Object.values(latest.current.accounts)) {
+					if (disposed) break;
+					if (account.service !== 'twitch' || account.reauthorize)
+						continue;
 					try {
-						// ensure that the API tokens are ready to use
-						// by checking whether or not this throws an error
 						await twitchAuth.getValidTokens(account.id);
 					} catch (error) {
-						console.error(
-							'Twitch reauthorization needed for account:',
-							account.displayName,
-							'Error:',
-							error,
-						);
-						// unable to get valid tokens
-						// set account to need reauthorization
-						reauthorizationNeeded();
-						return;
-					}
-
-					const { payload } = twitchMessage as Twitch.WebsocketMessage.Welcome;
-					const sessionId = payload.session.id;
-
-					keepAliveTimeoutSeconds = payload.session.keepalive_timeout_seconds;
-					startConnectionLostTimer();
-					twitchReconnectAttempts.current.delete(account.id);
-
-					if (reconnectUrl) {
-						console.info(
-							'Reconnected to Twitch Websocket using the server reconnect URL:',
-							account.displayName,
-						);
-						break;
-					}
-
-					// create all eventsub subscriptions using sessionId
-					for (const params of createEventSubParamsList(account.serviceId)) {
-						// stop creating subscriptions if websocket is closed
-						if (websocket.readyState !== WebSocket.OPEN) {
-							console.debug('Websocket closed, stopping EventSub creation.');
-							break;
-						}
-
-						try {
-							console.debug(
-								'Creating EventSub:',
-								params.type,
-								params.version,
-								params.condition,
-							);
-							await twitchApi.createEventSub(account, sessionId, params);
-						} catch (error) {
-							console.error(params.type, error);
-							reauthorizationNeeded();
-							break;
-						}
-					}
-
-					break;
-				}
-
-				// https://dev.twitch.tv/docs/eventsub/handling-websocket-events/#keepalive-message
-				case 'session_keepalive': {
-					startConnectionLostTimer();
-
-					break;
-				}
-
-				// https://dev.twitch.tv/docs/eventsub/handling-websocket-events/#notification-message
-				case 'notification': {
-					startConnectionLostTimer();
-					const notificationMessage =
-						twitchMessage as Twitch.WebsocketMessage.Notification;
-					console.debug(
-						notificationMessage.metadata.subscription_type,
-						notificationMessage.payload.event,
-					);
-
-					const relatedWidgets: string[] = [];
-					const widgetMetas = getWidgetMetas();
-					Object.entries(widgetMetas).forEach(([widgetId, widgetMeta]) => {
-						widgetMeta.accounts.forEach((accountSlot, index) => {
-							if (
-								account.widgets[widgetId] === index ||
-								(accountSlot.service === 'twitch' &&
-									accountSlot.type === 'read' &&
-									account.default)
-							) {
-								relatedWidgets.push(widgetId);
-								console.debug(
-									'Sent to Widget:',
-									widgetMeta.name,
-									widgetMeta.version,
-								);
-
-								const { subscription_type, message_timestamp: timestamp } =
-									notificationMessage.metadata;
-								const { event } = notificationMessage.payload;
-								const eventLogId = getEventLogId(account);
-
-								// log specific events to json for event labels
-								switch (subscription_type) {
-									case 'channel.follow': {
-										const followEvent = event as Twitch.WebsocketEvent.Follow;
-										logEvent(eventLogId, {
-											type: 'follow',
-											timestamp,
-											data: {
-												user_id: followEvent.user_id,
-												user_login: followEvent.user_login,
-												user_name: followEvent.user_name,
-											},
-										});
-										break;
-									}
-
-									case 'channel.subscribe': {
-										const subEvent = event as Twitch.WebsocketEvent.Subscribe;
-
-										// don't log individual subs from a gift sub
-										if (!subEvent.is_gift) {
-											logEvent(eventLogId, {
-												type: 'sub',
-												timestamp,
-												data: {
-													user_id: subEvent.user_id,
-													user_login: subEvent.user_login,
-													user_name: subEvent.user_name,
-													tier: subEvent.tier,
-												},
-											});
-										}
-										break;
-									}
-
-									case 'channel.subscription.message': {
-										const resubEvent =
-											event as Twitch.WebsocketEvent.SubscriptionMessage;
-
-										logEvent(eventLogId, {
-											type: 'resub',
-											timestamp,
-											data: {
-												user_id: resubEvent.user_id,
-												user_login: resubEvent.user_login,
-												user_name: resubEvent.user_name,
-												tier: resubEvent.tier,
-												cumulative_months: resubEvent.cumulative_months,
-												streak_months: resubEvent.streak_months,
-											},
-										});
-										break;
-									}
-
-									case 'channel.subscription.gift': {
-										const subGiftEvent =
-											event as Twitch.WebsocketEvent.SubscriptionGift;
-
-										logEvent(eventLogId, {
-											type: 'sub_gift',
-											timestamp,
-											data: {
-												user_id: subGiftEvent.user_id,
-												user_login: subGiftEvent.user_login,
-												user_name: subGiftEvent.user_name,
-												is_anonymous: subGiftEvent.is_anonymous,
-												tier: subGiftEvent.tier,
-												total: subGiftEvent.total,
-												cumulative_total: subGiftEvent.cumulative_total,
-											},
-										});
-										break;
-									}
-
-									case 'channel.raid': {
-										const raidEvent = event as Twitch.WebsocketEvent.Raid;
-										logEvent(eventLogId, {
-											type: 'raid',
-											timestamp,
-											data: {
-												user_id: raidEvent.from_broadcaster_user_id,
-												user_login: raidEvent.from_broadcaster_user_login,
-												user_name: raidEvent.from_broadcaster_user_name,
-												viewers: raidEvent.viewers,
-											},
-										});
-
-										break;
-									}
-
-									case 'channel.cheer': {
-										const cheerEvent = event as Twitch.WebsocketEvent.Cheer;
-										logEvent(eventLogId, {
-											type: 'cheer',
-											timestamp,
-											data: {
-												user_id: cheerEvent.user_id,
-												user_login: cheerEvent.user_login,
-												user_name: cheerEvent.user_name,
-												bits: cheerEvent.bits,
-											},
-										});
-
-										break;
-									}
-								}
-							}
-						});
-					});
-					// send events to all related widgets
-					Promise.all(
-						relatedWidgets.map(async widgetId => {
-							await sendTwitchEvent(
+						if (disposed) break;
+						if (error instanceof TwitchReauthorizationError)
+							reauthorize(account.id);
+						else
+							console.warn(
+								'Twitch token validation will retry:',
 								account.id,
-								widgetId,
-								notificationMessage.metadata.message_id,
-								notificationMessage.metadata.subscription_type,
-								notificationMessage.metadata.subscription_version,
-								notificationMessage.metadata.message_timestamp,
-								notificationMessage.payload.event,
+								safeLogText(error),
 							);
-						}),
-					);
-
-					break;
-				}
-
-				// https://dev.twitch.tv/docs/eventsub/handling-websocket-events/#reconnect-message
-				case 'session_reconnect': {
-					clearConnectionLostTimer();
-					suppressReconnect = true;
-					disconnectTwitchWebsocket();
-
-					const { payload } =
-						twitchMessage as Twitch.WebsocketMessage.Reconnect;
-
-					// create new websocket with reconnect_url
-					scheduleTwitchReconnect(account.id, payload.session.reconnect_url);
-
-					break;
-				}
-
-				// https://dev.twitch.tv/docs/eventsub/handling-websocket-events/#revocation-message
-				case 'revocation': {
-					const {
-						metadata,
-						payload: {
-							subscription: { status },
-						},
-					} = twitchMessage as Twitch.WebsocketMessage.Revocation;
-
-					console.error(
-						`Subscription "${metadata.subscription_type}" has been revoked due to "${status}".`,
-						{
-							type: metadata.subscription_type,
-							version: metadata.subscription_version,
-							status: status,
-							username: account.username,
-							userId: account.serviceId,
-						},
-					);
-
-					// no longer authorized by user or user has been banned
-					if (status === 'user_removed' || status === 'authorization_revoked') {
-						reauthorizationNeeded();
 					}
-
-					break;
 				}
+			} finally {
+				running = false;
 			}
-			});
-
-		websocket.addEventListener('error', event => {
-			console.error(
-				'Twitch Websocket error:',
-				account.displayName,
-				event,
-			);
-			// The close handler performs the reconnect. Calling close here also
-			// handles sockets that fail before the first keepalive is received.
-			websocket.close();
-		});
-
-		websocket.addEventListener('close', event => {
-			clearConnectionLostTimer();
-			if (!isCurrentWebsocket()) return;
-			twitchWebsockets.current.delete(account.id);
-			console.warn(
-				'Twitch Websocket closed:',
-				account.displayName,
-				'code',
-				event.code,
-				event.reason || '(no reason)',
-			);
-			if (!suppressReconnect) scheduleTwitchReconnect(account.id);
-		});
-	}
-
-	useEffect(() => {
-		// don't run if there are no widgets or no accounts
-		if (
-			Object.keys(widgetMetas).length === 0 ||
-			Object.keys(accounts).length === 0
-		) {
-			return;
 		}
-
-		Promise.all(
-			Object.values(accounts).map(async account => {
-				if (account.reauthorize) return;
-
-				// only run on twitch read accounts
-				if (
-					account.service === 'twitch' &&
-					account.type === 'read' &&
-					!twitchWebsockets.current.has(account.id)
-				) {
-					connectTwitchWebsocket(account.id);
-				}
-			}),
-		);
-	}, [widgetMetas, accounts]);
-}
-
-async function removeExistingEventSubs(accountId: string) {
-	const initialResponse = await twitchApi.getEventSubs(accountId);
-	let eventSubs = initialResponse.data.data;
-	let cursor = initialResponse.data.pagination.cursor;
-
-	while (cursor) {
-		const nextResponse = await twitchApi.getEventSubs(accountId, cursor);
-		eventSubs = [...eventSubs, ...nextResponse.data.data];
-		cursor = nextResponse.data.pagination.cursor;
-	}
-
-	console.debug('Existing EventSubs found:', eventSubs);
-	console.debug('Removing existing EventSubs...');
-
-	for (const eventSub of eventSubs) {
-		// need to do this one at a time to prevent rate limiting
-		// it's very quick regardless
-		await twitchApi.deleteEventSub(accountId, eventSub.id).catch(error => {
-			console.error(error);
-		});
-	}
-
-	console.debug('All existing EventSubs deleted.');
+		void validate();
+		const timer = setInterval(() => void validate(), 60_000);
+		return () => {
+			disposed = true;
+			clearInterval(timer);
+		};
+	}, []);
+	useEffect(() => {
+		const active = sessions.current;
+		return () => {
+			for (const session of active.values()) session.stop();
+			active.clear();
+		};
+	}, []);
 }

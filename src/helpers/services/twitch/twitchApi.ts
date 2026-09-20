@@ -1,9 +1,12 @@
 import axios, { type AxiosRequestConfig, type AxiosResponse } from 'axios';
 import type { Account } from '../../json/accounts';
-import twitchAuth from './twitchAuth';
+import twitchAuth, { TwitchReauthorizationError } from './twitchAuth';
 import { TWITCH_CLIENT_ID } from './twitchConstants';
 
-const twitchApiAxios = axios.create({ baseURL: 'https://api.twitch.tv/helix' });
+const twitchApiAxios = axios.create({
+	baseURL: 'https://api.twitch.tv/helix',
+	timeout: 15_000,
+});
 
 const twitchApi = {
 	async getUserByLogin(
@@ -30,6 +33,7 @@ const twitchApi = {
 		account: Account,
 		sessionId: string,
 		data: Twitch.EventSub.Param,
+		signal?: AbortSignal,
 	) {
 		return twitchApiPost<Twitch.ApiResponse.CreateEventSub>(
 			'/eventsub/subscriptions',
@@ -45,6 +49,7 @@ const twitchApi = {
 					session_id: sessionId,
 				},
 			},
+			{ signal },
 		);
 	},
 
@@ -143,38 +148,73 @@ async function authorizedConfig<D = unknown>(
 	};
 }
 
+async function authorizedRequest<T, D>(
+	accountId: string,
+	config: AxiosRequestConfig<D> | undefined,
+	request: (config: AxiosRequestConfig<D>) => Promise<AxiosResponse<T, D>>,
+) {
+	const authorized = await authorizedConfig<D>(accountId, config);
+	if (config?.signal?.aborted) throw new axios.CanceledError();
+	try {
+		return await request(authorized);
+	} catch (error) {
+		if (
+			!axios.isAxiosError(error) ||
+			error.response?.status !== 401 ||
+			config?.signal?.aborted
+		)
+			throw error;
+		const rejected = String(
+			authorized.headers?.Authorization ?? '',
+		).replace(/^Bearer /, '');
+		const tokens = await twitchAuth.getValidTokens(accountId, rejected);
+		if (config?.signal?.aborted) throw new axios.CanceledError();
+		try {
+			return await request({
+				...authorized,
+				headers: {
+					...authorized.headers,
+					Authorization: `Bearer ${tokens.accessToken}`,
+				},
+			});
+		} catch (retryError) {
+			if (
+				axios.isAxiosError(retryError) &&
+				retryError.response?.status === 401
+			)
+				throw new TwitchReauthorizationError(
+					'Twitch rejected the refreshed access token. Reconnect this account.',
+				);
+			throw retryError;
+		}
+	}
+}
 async function twitchApiGet<T = unknown, D = unknown>(
 	url: string,
 	accountId: string,
 	config?: AxiosRequestConfig<D>,
 ): Promise<AxiosResponse<T, D>> {
-	return twitchApiAxios.get<T, AxiosResponse<T, D>, D>(
-		url,
-		await authorizedConfig<D>(accountId, config),
+	return authorizedRequest(accountId, config, authorized =>
+		twitchApiAxios.get<T, AxiosResponse<T, D>, D>(url, authorized),
 	);
 }
-
 async function twitchApiPost<T = unknown, D = unknown>(
 	url: string,
 	accountId: string,
 	data?: D,
 	config?: AxiosRequestConfig<D>,
 ): Promise<AxiosResponse<T, D>> {
-	return twitchApiAxios.post<T, AxiosResponse<T, D>, D>(
-		url,
-		data,
-		await authorizedConfig<D>(accountId, config),
+	return authorizedRequest(accountId, config, authorized =>
+		twitchApiAxios.post<T, AxiosResponse<T, D>, D>(url, data, authorized),
 	);
 }
-
 async function twitchApiDelete<T = unknown, D = unknown>(
 	url: string,
 	accountId: string,
 	config?: AxiosRequestConfig<D>,
 ): Promise<AxiosResponse<T, D>> {
-	return twitchApiAxios.delete<T, AxiosResponse<T, D>, D>(
-		url,
-		await authorizedConfig<D>(accountId, config),
+	return authorizedRequest(accountId, config, authorized =>
+		twitchApiAxios.delete<T, AxiosResponse<T, D>, D>(url, authorized),
 	);
 }
 

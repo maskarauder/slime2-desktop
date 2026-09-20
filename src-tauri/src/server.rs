@@ -1,6 +1,11 @@
 use std::path::PathBuf;
-use warp::Filter;
+use warp::{Filter, Reply};
+pub mod access;
 pub mod websocket;
+
+#[derive(Debug)]
+struct Forbidden;
+impl warp::reject::Reject for Forbidden {}
 
 pub fn setup(
 	connections: websocket::WebsocketConnections,
@@ -28,13 +33,25 @@ pub fn setup(
 	let media_route = warp::path("media").and(warp::fs::dir(media_files_path));
 
 	let websocket_route = warp::path("websocket")
+		.and(warp::path::end())
+		.and(warp::header::optional::<String>("origin"))
+		.and_then(|origin: Option<String>| async move {
+			if access::allowed_origin(origin.as_deref()) {
+				Ok(())
+			} else {
+				Err(warp::reject::custom(Forbidden))
+			}
+		})
+		.untuple_one()
 		.and(warp::ws())
 		.and(warp::any().map(move || connections.clone()))
 		.map(
 			|ws: warp::ws::Ws, connections: websocket::WebsocketConnections| {
-				ws.on_upgrade(|websocket| {
-					websocket::connect(websocket, connections)
-				})
+				ws.max_message_size(1024 * 1024)
+					.max_frame_size(1024 * 1024)
+					.on_upgrade(|websocket| {
+						websocket::connect(websocket, connections)
+					})
 			},
 		);
 
@@ -46,8 +63,25 @@ pub fn setup(
 			.or(websocket_route)
 			.or(preview_route)
 			.or(media_route)
-			// allow any origin for all so that widget server can access it
-			.with(warp::cors().allow_any_origin());
+			// Allow the separate development overlay and Tauri preview origins.
+			.with(warp::cors().allow_origins([
+				"http://localhost:57141",
+				"http://127.0.0.1:57141",
+				"http://tauri.localhost",
+				"tauri://localhost",
+			]));
+
+		let routes = warp::header::<String>("host")
+			.and_then(|host: String| async move {
+				if access::allowed_host(&host) {
+					Ok(())
+				} else {
+					Err(warp::reject::custom(Forbidden))
+				}
+			})
+			.untuple_one()
+			.and(routes)
+			.recover(reject_forbidden);
 
 		// port 57140 in dev
 		// widget server running on port 57141
@@ -60,9 +94,20 @@ pub fn setup(
 			.or(tiles_route)
 			.or(preview_route)
 			.or(media_route)
-			// allow any origin just for the websocket route
-			// this allows external applications to use it
-			.or(websocket_route.with(warp::cors().allow_any_origin()));
+			// Browser WebSockets use the explicit Origin check above.
+			.or(websocket_route);
+
+		let routes = warp::header::<String>("host")
+			.and_then(|host: String| async move {
+				if access::allowed_host(&host) {
+					Ok(())
+				} else {
+					Err(warp::reject::custom(Forbidden))
+				}
+			})
+			.untuple_one()
+			.and(routes)
+			.recover(reject_forbidden);
 
 		// port 57143 in production, widget server running on the same port
 		// 57143 kind of looks like slime :3c
@@ -72,4 +117,18 @@ pub fn setup(
 	}
 
 	Ok(())
+}
+
+async fn reject_forbidden(
+	rejection: warp::Rejection,
+) -> Result<warp::reply::Response, warp::Rejection> {
+	if rejection.find::<Forbidden>().is_some() {
+		Ok(warp::reply::with_status(
+			"Forbidden",
+			warp::http::StatusCode::FORBIDDEN,
+		)
+		.into_response())
+	} else {
+		Err(rejection)
+	}
 }

@@ -400,3 +400,71 @@ test('poll delays release their abort listeners on both normal completion and ca
 	await delay;
 	assert.equal(getEventListeners(h.controller.signal, 'abort').length, 0);
 });
+
+test('gift combos and polls update, tombstones remove, and replay stays suppressed', async () => {
+	const h = harness();
+	const forwarded = [];
+	h.options.onMessage = async value => forwarded.push(value);
+	const gift = count => ({
+		...message('gift'),
+		snippet: {
+			...message('gift').snippet,
+			type: 'giftEvent',
+			giftEventDetails: {
+				giftMetadata: { giftName: 'Rose', comboCount: count },
+			},
+		},
+	});
+	const poll = count => ({
+		...message('poll'),
+		snippet: {
+			...message('poll').snippet,
+			type: 'pollEvent',
+			pollDetails: {
+				metadata: {
+					questionText: 'Choose',
+					options: [{ optionText: 'A', tally: count }],
+					status: 'active',
+				},
+			},
+		},
+	});
+	const tombstone = {
+		...message('text'),
+		snippet: { ...message('text').snippet, type: 'tombstone' },
+	};
+	h.dependencies.stream = async function* () {
+		yield {
+			items: [message('text'), gift(1)],
+			activePollItem: poll(1),
+			nextPageToken: 'one',
+		};
+		yield {
+			items: [gift(1), gift(2), tombstone],
+			activePollItem: poll(2),
+			nextPageToken: 'two',
+		};
+		yield {
+			items: [message('text'), gift(2), tombstone],
+			activePollItem: poll(2),
+			nextPageToken: 'three',
+		};
+		h.controller.abort();
+	};
+	await h.run();
+	assert.deepEqual(
+		forwarded.map(m => [m.id, m.snippet.type]),
+		[
+			['text', 'textMessageEvent'],
+			['gift', 'giftEvent'],
+			['poll', 'pollEvent'],
+			['gift', 'giftEvent'],
+			['text', 'tombstone'],
+			['poll', 'pollEvent'],
+		],
+	);
+	assert.equal(
+		forwarded[3].snippet.giftEventDetails.giftMetadata.comboCount,
+		2,
+	);
+});

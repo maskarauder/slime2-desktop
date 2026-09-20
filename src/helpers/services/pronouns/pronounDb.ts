@@ -2,6 +2,7 @@ import { getAppVersion } from '@/helpers/appVersion';
 import axios from 'axios';
 
 const pronounDbAxios = axios.create({
+	timeout: 1500,
 	baseURL: 'https://pronoundb.org/api/v2',
 });
 

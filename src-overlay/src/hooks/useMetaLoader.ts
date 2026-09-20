@@ -1,21 +1,35 @@
 import { useLoaderData } from '@tanstack/react-router';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { cacheBust, createDataUrl } from '../helpers/serverUrl';
 import type { Meta } from '../helpers/widgetApi';
 
 export default function useMetaLoader() {
 	const { meta, widgetId } = useLoaderData({ from: '/$' });
-	const loadingRef = useRef(true);
+	const loadRef = useRef<Promise<void> | null>(null);
+	const [ready, setReady] = useState(false);
 
 	useEffect(() => {
-		if (!loadingRef.current) return;
-
-		setTitle(meta);
-		loadCSS(meta, widgetId);
-		loadJS(meta, widgetId);
-
-		loadingRef.current = false;
+		let cancelled = false;
+		if (!loadRef.current) {
+			setTitle(meta);
+			loadCSS(meta, widgetId);
+			loadRef.current = loadJS(meta, widgetId);
+		}
+		void loadRef.current
+			.then(() => {
+				if (!cancelled) setReady(true);
+			})
+			.catch(() => {
+				if (!cancelled)
+					console.error(
+						'Unable to load widget scripts. Reload this browser source to retry.',
+					);
+			});
+		return () => {
+			cancelled = true;
+		};
 	}, [meta, widgetId]);
+	return ready;
 }
 
 // set tab title
@@ -37,8 +51,8 @@ function loadCSS(meta: Meta, widgetId: string) {
 	});
 }
 
-function loadJS(meta: Meta, widgetId: string) {
-	meta.import?.js?.forEach(js => {
+async function loadJS(meta: Meta, widgetId: string) {
+	for (const js of meta.import?.js ?? []) {
 		const scriptElement = document.createElement('script');
 
 		if (typeof js === 'string') {
@@ -53,8 +67,27 @@ function loadJS(meta: Meta, widgetId: string) {
 			});
 		}
 
-		document.head.appendChild(scriptElement);
-	});
+		scriptElement.async = false;
+		await new Promise<void>((resolve, reject) => {
+			const timer = setTimeout(
+				() => finish(new Error('Widget script load timed out.')),
+				30000,
+			);
+			function finish(error?: Error) {
+				clearTimeout(timer);
+				scriptElement.onload = null;
+				scriptElement.onerror = null;
+				if (error) {
+					scriptElement.remove();
+					reject(error);
+				} else resolve();
+			}
+			scriptElement.onload = () => finish();
+			scriptElement.onerror = () =>
+				finish(new Error('Widget script load failed.'));
+			document.head.appendChild(scriptElement);
+		});
+	}
 }
 
 function generateImportURL(fileName: string, widgetId: string) {

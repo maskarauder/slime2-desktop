@@ -1,240 +1,97 @@
-use futures::{SinkExt, StreamExt, TryFutureExt, stream::SplitSink};
+use futures::StreamExt;
 use std::{
-	collections::HashSet,
 	sync::{
 		Arc,
 		atomic::{AtomicUsize, Ordering},
 	},
+	time::{Duration, Instant},
 };
-use tokio::sync::{RwLock, mpsc};
+use tokio::sync::{RwLock, Semaphore};
 use warp::filters::ws::{Message, WebSocket};
-
+mod connection;
 mod ws_commands;
+pub use connection::WebsocketConnection;
 
 static NEXT_CONNECTION_ID: AtomicUsize = AtomicUsize::new(0);
-
+static ACTIVE: Semaphore = Semaphore::const_new(32);
+const MAX_INBOUND_BYTES: usize = 1024 * 1024;
 pub type WebsocketConnections = Arc<RwLock<Vec<Arc<WebsocketConnection>>>>;
 
-pub struct WebsocketConnection {
-	id: usize,
-	sender: mpsc::UnboundedSender<Message>,
-	channels: HashSet<String>,
-}
-
-impl WebsocketConnection {
-	fn new(
-		id: usize,
-		mut websocket_sender: SplitSink<WebSocket, Message>,
-		channels: HashSet<String>,
-	) -> WebsocketConnection {
-		// use an unbounded channel for infinite message capacity
-		let (ub_sender, mut ub_receiver) = mpsc::unbounded_channel();
-
-		// when a message is sent to the unbounded receiver, send it to the websocket
-		tokio::task::spawn(async move {
-			while let Some(message) = ub_receiver.recv().await {
-				websocket_sender
-					.send(message)
-					.unwrap_or_else(|error| {
-						log::error!("Websocket Send Error: {}", error)
-					})
-					.await;
-			}
-		});
-
-		WebsocketConnection {
-			id,
-			sender: ub_sender,
-			channels,
-		}
-	}
-
-	/// Sends `message` to the connected client if `channel` is registered, or if `channel == "all"`.
-	pub fn send(&self, message: &str, channel: &str) {
-		// only send if the channel is a registered channel or "all"
-		if channel == "all" || self.channels.contains(channel) {
-			if let Err(_disconnected) = self.sender.send(Message::text(message))
-			{
-				// sender is disconnected, our `disconnected` code should be happening
-				// in another task, nothing more to do here.
-			}
-		}
-	}
-
-	pub fn send_direct(&self, message: &str) -> Result<(), String> {
-		self.sender
-			.send(Message::text(message))
-			.map_err(|_| String::from("Websocket connection is closed."))
-	}
-}
-
 pub async fn connect(websocket: WebSocket, connections: WebsocketConnections) {
-	// use a counter to assign a new unique ID for this connection
-	let connection_id = NEXT_CONNECTION_ID.fetch_add(1, Ordering::Relaxed);
-	log::debug!("New Websocket Connection (ID: {})", connection_id);
-
-	if let Err(error) =
-		message_handler(websocket, &connections, connection_id).await
+	let Ok(_permit) = ACTIVE.try_acquire() else {
+		return;
+	};
+	let id = NEXT_CONNECTION_ID.fetch_add(1, Ordering::Relaxed);
+	if let Err(error) = message_handler(websocket, &connections, id).await {
+		log::warn!("Widget connection {} ended: {}", id, error);
+	}
+	let mut guard = connections.write().await;
+	if let Some(index) = guard.iter().position(|connection| connection.id == id)
 	{
-		log::error!("Websocket Message Handler Error: {}", error);
-	}
-
-	disconnect(connection_id, &connections).await;
-}
-
-fn get_command(
-	message_result: Result<Message, warp::Error>,
-) -> Result<ws_commands::Command, String> {
-	match message_result {
-		Ok(message) => {
-			if message.is_text() {
-				let Ok(message_text) = message.to_str() else {
-					// message is not a text string
-					return Err(String::from(
-						"Message is somehow not a Text message! (This should never happen here)",
-					));
-				};
-
-				let command = match serde_json::from_str::<ws_commands::Command>(
-					message_text,
-				) {
-					Ok(command) => command,
-					// text cannot be deserialized into a Command
-					Err(error) => {
-						return Err(format!(
-							"Failed to deserialize Message ({}) into a Command! {}",
-							message_text, error
-						));
-					}
-				};
-
-				return Ok(command);
-			} else if message.is_close() {
-				return Err(String::from(
-					"Websocket connection closed by the client.",
-				));
-			} else {
-				return Err(String::from(
-					"Unrecognized websocket message type!",
-				));
-			}
-		}
-		Err(error) => Err(error.to_string()),
+		let connection = guard.swap_remove(index);
+		connection.close();
 	}
 }
 
-// returns early on any error, to immediately disconnect the websocket
+fn get_command(message: Message) -> Result<ws_commands::Command, String> {
+	if !message.is_text() || message.as_bytes().len() > MAX_INBOUND_BYTES {
+		return Err("Invalid widget message type or size.".into());
+	}
+	serde_json::from_slice(message.as_bytes())
+		.map_err(|_| "Malformed widget command.".into())
+}
+
 async fn message_handler(
 	websocket: WebSocket,
 	connections: &WebsocketConnections,
-	connection_id: usize,
+	id: usize,
 ) -> Result<(), String> {
-	// split the websocket into a sender and receiver of messages
-	let (websocket_sender, mut websocket_receiver) = websocket.split();
-
-	// check if the first incoming message is a Register Command
-	if let Some(result) = websocket_receiver.next().await {
-		let command = match get_command(result) {
-			Ok(command) => command,
-			Err(error) => {
-				// error occured while converting into command
-				return Err(format!(
-					"Websocket Error (ID: {}): {}",
-					connection_id, error
-				));
-			}
-		};
-
-		if command.r#type != "register" {
-			return Err(format!(
-				"First message from (ID: {}) is not a register command!",
-				connection_id
-			));
-		}
-
-		// handle registration
-		if let Err(error) = ws_commands::register(
-			command.data,
-			connection_id,
-			websocket_sender,
-			connections,
-		)
+	let (sender, mut receiver) = websocket.split();
+	let first = tokio::time::timeout(Duration::from_secs(10), receiver.next())
 		.await
-		{
-			return Err(format!(
-				"Error from (ID: {}): {}",
-				connection_id, error
-			));
-		}
+		.map_err(|_| "Widget registration timed out.")?
+		.ok_or("Widget closed before registration.")?
+		.map_err(|_| "Widget registration failed.")?;
+	let command = get_command(first)?;
+	if command.r#type != "register" {
+		return Err("First widget command must register.".into());
 	}
-
-	// handle all other incoming messages
-	while let Some(result) = websocket_receiver.next().await {
-		let command = match get_command(result) {
-			Ok(command) => command,
-			Err(error) => {
-				// error occured while converting into command
-				return Err(format!(
-					"Websocket Error (ID: {}): {}",
-					connection_id, error
-				));
-			}
+	let connection =
+		ws_commands::register(command.data, id, sender, connections).await?;
+	let mut cancelled = connection.closed.subscribe();
+	let mut tokens = 400f64;
+	let mut last = Instant::now();
+	loop {
+		if *cancelled.borrow() {
+			return Ok(());
+		}
+		let incoming = tokio::select! {
+		 _ = cancelled.changed() => return Ok(()),
+		 incoming = tokio::time::timeout(Duration::from_secs(60), receiver.next()) => incoming.map_err(|_| "Widget heartbeat timed out.")?,
 		};
-
-		// command handling
+		let Some(incoming) = incoming else {
+			return Ok(());
+		};
+		let message = incoming.map_err(|_| "Widget transport disconnected.")?;
+		if message.is_close() {
+			return Ok(());
+		}
+		let now = Instant::now();
+		tokens = (tokens + now.duration_since(last).as_secs_f64() * 100.0)
+			.min(400.0);
+		last = now;
+		if tokens < 1.0 {
+			return Err("Widget request rate limit exceeded.".into());
+		}
+		tokens -= 1.0;
+		if message.is_ping() || message.is_pong() {
+			continue;
+		}
+		let command = get_command(message)?;
 		match command.r#type.as_str() {
-			"request" => {
-				if let Err(error) = ws_commands::request(command.data) {
-					return Err(format!(
-						"Error from (ID: {}): {}",
-						connection_id, error
-					));
-				}
-			}
-			"heartbeat" => {
-				if let Err(error) =
-					ws_commands::heartbeat(command.data, connection_id, connections).await
-				{
-					return Err(format!(
-						"Error from (ID: {}): {}",
-						connection_id, error
-					));
-				}
-			}
-			"register" => {
-				// not allowed to register more than once
-				return Err(format!(
-					"Connection (ID: {}) attempted to register twice!",
-					connection_id
-				));
-			}
-			_ => {
-				return Err(format!(
-					"Connection (ID: {}) sent an unexpected command type!",
-					connection_id
-				));
-			}
+			"request" => ws_commands::request(command.data, &connection)?,
+			"heartbeat" => ws_commands::heartbeat(command.data, &connection)?,
+			_ => return Err("Unexpected widget command.".into()),
 		}
 	}
-
-	Ok(())
-}
-
-async fn disconnect(connection_id: usize, connections: &WebsocketConnections) {
-	// get write guard of connections
-	let mut connections_write_guard = connections.write().await;
-
-	// stream closed, remove from connections list
-	if let Some(index) = connections_write_guard
-		.iter()
-		.position(|connection| connection.id == connection_id)
-	{
-		// swap_remove used for performance since order doesn't matter
-		connections_write_guard.swap_remove(index);
-	};
-
-	// release write guard
-	drop(connections_write_guard);
-
-	log::info!("Disconnected Websocket (ID: {})", connection_id)
 }

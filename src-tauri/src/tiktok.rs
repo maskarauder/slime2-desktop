@@ -1,21 +1,19 @@
+use crate::session_tasks::SessionTasks;
 use futures::{SinkExt, StreamExt};
 use serde::Serialize;
-use std::collections::HashMap;
 use tauri::{AppHandle, Emitter};
-use tokio::{
-	sync::Mutex,
-	task::JoinHandle,
-	time::{Duration, sleep, timeout},
-};
+use tokio::time::{Duration, sleep, timeout};
 use tokio_tungstenite::{
-	connect_async, WebSocketStream,
-	tungstenite::{Error as WebSocketError, Message},
+	WebSocketStream, connect_async_with_config,
+	tungstenite::{
+		Error as WebSocketError, Message, protocol::WebSocketConfig,
+	},
 };
 use url::Url;
 
 const EULER_STREAM_WEBSOCKET_URL: &str = "wss://ws.eulerstream.com";
-const OFFLINE_RETRY_DELAY: Duration = Duration::from_secs(60);
-const ERROR_RETRY_DELAY: Duration = Duration::from_secs(15);
+const OFFLINE_RETRY_DELAY: Duration = Duration::from_secs(300);
+const ERROR_RETRY_DELAY: Duration = Duration::from_secs(300);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 const IDLE_PROBE_DELAY: Duration = Duration::from_secs(30);
 const PROBE_TIMEOUT: Duration = Duration::from_secs(15);
@@ -23,32 +21,37 @@ const WRITE_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Default)]
 pub struct TikTokConnections {
-	tasks: Mutex<HashMap<String, JoinHandle<()>>>,
+	tasks: SessionTasks,
 }
 
 impl TikTokConnections {
 	pub async fn start(
 		&self,
 		account_id: String,
+		session_id: String,
 		unique_id: String,
 		api_key: String,
 		app_handle: AppHandle,
 	) {
-		self.stop(&account_id).await;
-
 		let task_account_id = account_id.clone();
-		let task = tokio::spawn(async move {
-			consume_live_chat(task_account_id, unique_id, api_key, app_handle)
-				.await;
-		});
-
-		self.tasks.lock().await.insert(account_id, task);
+		let task_session_id = session_id.clone();
+		self.tasks
+			.replace(account_id, session_id, || {
+				tokio::spawn(async move {
+					consume_live_chat(
+						task_account_id,
+						task_session_id,
+						unique_id,
+						api_key,
+						app_handle,
+					)
+					.await;
+				})
+			})
+			.await;
 	}
-
-	pub async fn stop(&self, account_id: &str) {
-		if let Some(task) = self.tasks.lock().await.remove(account_id) {
-			task.abort();
-		}
+	pub async fn stop(&self, account_id: &str, session_id: &str) {
+		self.tasks.stop(account_id, session_id).await;
 	}
 }
 
@@ -56,6 +59,7 @@ impl TikTokConnections {
 #[serde(rename_all = "camelCase")]
 struct TikTokMessagePayload {
 	account_id: String,
+	session_id: String,
 	message: String,
 }
 
@@ -63,6 +67,7 @@ struct TikTokMessagePayload {
 #[serde(rename_all = "camelCase")]
 struct TikTokStatusPayload {
 	account_id: String,
+	session_id: String,
 	state: String,
 	code: Option<u16>,
 	message: Option<String>,
@@ -70,6 +75,7 @@ struct TikTokStatusPayload {
 
 async fn consume_live_chat(
 	account_id: String,
+	session_id: String,
 	unique_id: String,
 	api_key: String,
 	app_handle: AppHandle,
@@ -80,6 +86,7 @@ async fn consume_live_chat(
 			emit_status(
 				&app_handle,
 				&account_id,
+				&session_id,
 				"error",
 				None,
 				Some(message),
@@ -92,30 +99,41 @@ async fn consume_live_chat(
 		emit_status(
 			&app_handle,
 			&account_id,
+			&session_id,
 			"connecting",
 			None,
 			None,
 		);
 
-		let connection = match timeout(
-			CONNECT_TIMEOUT,
-			connect_async(websocket_url.as_str()),
-		)
-		.await
-		{
-			Ok(result) => result,
-			Err(_) => {
-				emit_status(
+		let connection =
+			match timeout(
+				CONNECT_TIMEOUT,
+				connect_async_with_config(
+					websocket_url.as_str(),
+					Some(
+						WebSocketConfig::default()
+							.max_message_size(Some(1024 * 1024))
+							.max_frame_size(Some(1024 * 1024)),
+					),
+					false,
+				),
+			)
+			.await
+			{
+				Ok(result) => result,
+				Err(_) => {
+					emit_status(
 					&app_handle,
 					&account_id,
+					&session_id,
 					"reconnecting",
 					None,
 					Some("Euler Stream connection timed out after 30 seconds.".to_string()),
 				);
-				sleep(ERROR_RETRY_DELAY).await;
-				continue;
-			}
-		};
+					sleep(ERROR_RETRY_DELAY).await;
+					continue;
+				}
+			};
 		let (mut websocket, _) = match connection {
 			Ok(connection) => connection,
 			Err(error) => {
@@ -124,6 +142,7 @@ async fn consume_live_chat(
 					emit_status(
 						&app_handle,
 						&account_id,
+						&session_id,
 						"reauthorize",
 						status,
 						Some(
@@ -137,6 +156,7 @@ async fn consume_live_chat(
 				emit_status(
 					&app_handle,
 					&account_id,
+					&session_id,
 					"reconnecting",
 					status,
 					Some("Unable to connect to Euler Stream.".to_string()),
@@ -149,6 +169,7 @@ async fn consume_live_chat(
 		emit_status(
 			&app_handle,
 			&account_id,
+			&session_id,
 			"connected",
 			None,
 			None,
@@ -177,20 +198,33 @@ async fn consume_live_chat(
 					emit_message(
 						&app_handle,
 						&account_id,
+						&session_id,
 						message.to_string(),
 					);
 				}
 				Message::Binary(message) => {
 					if let Ok(message) = String::from_utf8(message.to_vec()) {
-						emit_message(&app_handle, &account_id, message);
+						emit_message(
+							&app_handle,
+							&account_id,
+							&session_id,
+							message,
+						);
 					}
 				}
 				Message::Ping(payload) => {
 					if !matches!(
-						timeout(WRITE_TIMEOUT, websocket.send(Message::Pong(payload))).await,
+						timeout(
+							WRITE_TIMEOUT,
+							websocket.send(Message::Pong(payload))
+						)
+						.await,
 						Ok(Ok(())),
 					) {
-						close_reason = Some("Unable to send the Euler Stream heartbeat reply.".to_string());
+						close_reason = Some(
+							"Unable to send the Euler Stream heartbeat reply."
+								.to_string(),
+						);
 						break;
 					}
 				}
@@ -214,6 +248,7 @@ async fn consume_live_chat(
 				emit_status(
 					&app_handle,
 					&account_id,
+					&session_id,
 					"reauthorize",
 					close_code,
 					close_reason.or_else(|| {
@@ -229,10 +264,14 @@ async fn consume_live_chat(
 				emit_status(
 					&app_handle,
 					&account_id,
+					&session_id,
 					"error",
 					close_code,
 					close_reason.or_else(|| {
-						Some("Euler Stream rejected the connection options.".to_string())
+						Some(
+							"Euler Stream rejected the connection options."
+								.to_string(),
+						)
 					}),
 				);
 				return;
@@ -241,6 +280,7 @@ async fn consume_live_chat(
 				emit_status(
 					&app_handle,
 					&account_id,
+					&session_id,
 					"offline",
 					close_code,
 					close_reason,
@@ -251,6 +291,7 @@ async fn consume_live_chat(
 				emit_status(
 					&app_handle,
 					&account_id,
+					&session_id,
 					"reconnecting",
 					close_code,
 					close_reason,
@@ -285,8 +326,9 @@ where
 			) {
 				return Err("Unable to send an Euler Stream heartbeat probe.");
 			}
-			timeout(probe_timeout, websocket.next()).await
-				.map_err(|_| "Euler Stream heartbeat timed out; reconnecting.")?
+			timeout(probe_timeout, websocket.next()).await.map_err(
+				|_| "Euler Stream heartbeat timed out; reconnecting.",
+			)?
 		}
 	};
 	result
@@ -326,11 +368,17 @@ fn websocket_error_status(error: &WebSocketError) -> Option<u16> {
 	}
 }
 
-fn emit_message(app_handle: &AppHandle, account_id: &str, message: String) {
+fn emit_message(
+	app_handle: &AppHandle,
+	account_id: &str,
+	session_id: &str,
+	message: String,
+) {
 	if let Err(error) = app_handle.emit(
 		"tiktok-live-message",
 		TikTokMessagePayload {
 			account_id: account_id.to_string(),
+			session_id: session_id.to_string(),
 			message,
 		},
 	) {
@@ -341,6 +389,7 @@ fn emit_message(app_handle: &AppHandle, account_id: &str, message: String) {
 fn emit_status(
 	app_handle: &AppHandle,
 	account_id: &str,
+	session_id: &str,
 	state: &str,
 	code: Option<u16>,
 	message: Option<String>,
@@ -349,6 +398,7 @@ fn emit_status(
 		"tiktok-live-status",
 		TikTokStatusPayload {
 			account_id: account_id.to_string(),
+			session_id: session_id.to_string(),
 			state: state.to_string(),
 			code,
 			message,

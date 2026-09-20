@@ -1,3 +1,5 @@
+import { resolveWidgetAccounts } from '@/helpers/accountRouting';
+import { loadWidgetMeta } from '@/helpers/json/widgetMeta';
 import useAccounts from '@/contexts/accounts/useAccounts';
 import { useBotsLogDispatch } from '@/contexts/bot_logs/useBotLogsDispatch';
 import bttvApi from '@/helpers/services/emotes/betterTTV';
@@ -99,6 +101,10 @@ export default function useWidgetRequest() {
 			try {
 				const request = WidgetRequestZ.parse(event.detail);
 				const { widget_id, request_id, request_type } = request;
+				const meta =
+					'account_id' in request.payload
+						? await loadWidgetMeta(widget_id)
+						: undefined;
 
 				async function respond(response: unknown) {
 					return sendWidgetResponse(
@@ -136,6 +142,18 @@ export default function useWidgetRequest() {
 						);
 					}
 
+					if (
+						!meta ||
+						!resolveWidgetAccounts(
+							widget_id,
+							meta,
+							accountsRef.current,
+						).some(selected => selected?.id === accountId)
+					) {
+						throw new Error(
+							'This account is not assigned to this widget.',
+						);
+					}
 					return account;
 				}
 
@@ -158,8 +176,14 @@ export default function useWidgetRequest() {
 						break;
 					}
 					case 'set-shared-widget-storage': {
-						const { scope, key, value_json, mode, operation_id, expected_revision } =
-							request.payload;
+						const {
+							scope,
+							key,
+							value_json,
+							mode,
+							operation_id,
+							expected_revision,
+						} = request.payload;
 						const result = await setSharedWidgetStorage(
 							widget_id,
 							scope,
@@ -167,7 +191,9 @@ export default function useWidgetRequest() {
 							value_json,
 							mode,
 							operation_id,
-							expected_revision === undefined ? undefined : Number(expected_revision),
+							expected_revision === undefined
+								? undefined
+								: Number(expected_revision),
 						);
 						await Promise.all([
 							respond(result),
@@ -287,6 +313,21 @@ export default function useWidgetRequest() {
 							reply_parent_message_id,
 						} = request.payload;
 
+						if (
+							!meta ||
+							!resolveWidgetAccounts(
+								widget_id,
+								meta,
+								accountsRef.current,
+							).some(
+								selected =>
+									selected?.service === 'twitch' &&
+									selected.serviceId === broadcaster_id,
+							)
+						)
+							throw new Error(
+								'The target Twitch channel is not assigned to this widget.',
+							);
 						const chatMessageResponse =
 							await twitchApi.sendChatMessage(
 								account.id,
@@ -503,7 +544,9 @@ const SetSharedWidgetStorageRequestZ = z.object({
 		value_json: z.string(),
 		mode: z.literal(['set', 'set-if-absent', 'compare-and-set']),
 		operation_id: z.optional(z.string()),
-		expected_revision: z.optional(z.string().check(z.regex(/^(0|[1-9]\d{0,15})$/))),
+		expected_revision: z.optional(
+			z.string().check(z.regex(/^(0|[1-9]\d{0,15})$/)),
+		),
 	}),
 });
 

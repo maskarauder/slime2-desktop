@@ -1,3 +1,4 @@
+import { getWidgetAccessToken } from './commands';
 export const DEV_PORT = 57140;
 export const DEV_OVERLAY_SERVER_PORT = 57141;
 export const PROD_PORT = 57143;
@@ -19,8 +20,9 @@ export function createPreviewUrl(fileName: string) {
 	return `${PREVIEW_BASE_URL}/${fileName}`;
 }
 
-export function createOverlayUrl(id: string) {
-	return `${OVERLAY_SERVER_BASE_URL}/?widgetId=${id}`;
+export async function createOverlayUrl(id: string) {
+	const token = await getWidgetAccessToken(id);
+	return `${OVERLAY_SERVER_BASE_URL}/?widgetId=${encodeURIComponent(id)}#token=${encodeURIComponent(token)}`;
 }
 
 export function createMediaUrl(fileName: string) {

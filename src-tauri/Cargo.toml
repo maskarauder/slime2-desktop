@@ -37,7 +37,7 @@ tauri-plugin-single-instance = "2.4.3"
 tauri-plugin-window-state = "2.4.1"
 time = { version = "0.3.55", features = ["formatting", "local-offset"] }
 tokio = { version = "1.53.1", features = ["full"] }
-tokio-tungstenite = "0.30.0"
+tokio-tungstenite = { version = "0.30.0", features = ["rustls-tls-webpki-roots"] }
 url = "2.5.8"
 walkdir = "2.5.0"
 warp = { version = "0.4.3", features = ["server", "websocket"] }

@@ -36,7 +36,7 @@ export default function OverlayURLDialog({
 									<p>Open In Light Mode</p>
 								</ExternalLink>
 								<ExternalLink
-									href={`${link}&dark=true`}
+									href={link.replace('#', '&dark=true#')}
 									className='-mt-1 flex items-center gap-1 rounded-1 bg-zinc-800 px-2 py-0.5 text-3.5 font-semibold text-white outline-2 -outline-offset-1! outline-zinc-400 over:bg-green-900 over:outline-4 over:outline-lime-600'
 								>
 									<DoorOpenSvg className='size-4' />
@@ -62,7 +62,9 @@ export default function OverlayURLDialog({
 							<div className='absolute inset-0 bottom-1/2 bg-linear-to-b from-white/30 to-white/20'></div>
 							<div className='relative flex flex-1 items-center gap-2 drop-shadow-[0_1px_3px_#FFFB]'>
 								<DoubleSquareSvg className='size-4' />
-								<p className='-mt-0.5'>{copied ? 'Copied!' : 'Copy'}</p>
+								<p className='-mt-0.5'>
+									{copied ? 'Copied!' : 'Copy'}
+								</p>
 							</div>
 						</button>
 					</div>
@@ -73,16 +75,19 @@ export default function OverlayURLDialog({
 				>
 					<ol className='list-decimal pl-4'>
 						<li>
-							<strong>Copy</strong> the URL <strong>above</strong>.
+							<strong>Copy</strong> the URL <strong>above</strong>
+							.
 						</li>
 						<li>
-							Open <strong>OBS Studio</strong> (or other streaming software).
+							Open <strong>OBS Studio</strong> (or other streaming
+							software).
 						</li>
 						<li>
 							Create a new <strong>Browser Source</strong>.
 						</li>
 						<li>
-							<strong>Paste</strong> into the <strong>URL field</strong>.
+							<strong>Paste</strong> into the{' '}
+							<strong>URL field</strong>.
 						</li>
 					</ol>
 				</Description>

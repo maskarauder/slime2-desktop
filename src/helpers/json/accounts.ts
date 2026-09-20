@@ -35,9 +35,11 @@ export async function getTokens(accountId: string): Promise<Tokens> {
 	try {
 		const tokens = JSON.parse(secret);
 		return Tokens.parse(tokens);
-	} catch (error) {
-		logZodError(error, secret);
-		throw error;
+	} catch {
+		// JSON parsing/schema errors can embed the credential value itself.
+		throw new Error(
+			'Stored account credentials are invalid. Reconnect this account.',
+		);
 	}
 }
 

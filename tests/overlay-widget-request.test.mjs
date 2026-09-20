@@ -22,7 +22,8 @@ const compiled = ts.transpileModule(
 	},
 ).outputText;
 
-function harness() {
+function harness({ ready = true, token = true, autoRegister = true } = {}) {
+	const target = new EventTarget();
 	const effects = [];
 	const refs = [];
 	const timers = new Map();
@@ -50,6 +51,12 @@ function harness() {
 			this.readyState = 1;
 			this.listeners.get('open')?.forEach(fn => fn());
 			this.onopen?.();
+			if (autoRegister)
+				this.message({
+					widgetId: 'widget_test',
+					type: 'registered',
+					data: {},
+				});
 		}
 		send(message) {
 			if (this.readyState !== 1) throw new Error('Closed socket');
@@ -102,6 +109,12 @@ function harness() {
 		exports,
 		slime2,
 		WebSocket: Socket,
+		URLSearchParams,
+		location: { hash: token ? '#token=' + 'x'.repeat(48) : '' },
+		CustomEvent,
+		addEventListener: target.addEventListener.bind(target),
+		removeEventListener: target.removeEventListener.bind(target),
+		dispatchEvent: target.dispatchEvent.bind(target),
 		console: { info() {}, warn() {}, error() {} },
 		setTimeout(fn, delay) {
 			const id = ++nextId;
@@ -123,7 +136,7 @@ function harness() {
 			return dependencies[name];
 		},
 	});
-	exports.default();
+	exports.default(ready);
 	const cleanup = effects.map(fn => fn());
 	return {
 		slime2,
@@ -173,12 +186,12 @@ test('a request waiting for connection removes both listeners when it times out'
 	const h = harness();
 	const pending = h.slime2.request('get-shared-widget-storage', {});
 	const assertion = assert.rejects(pending, /Timed out connecting/);
-	const timer = [...h.timers.values()].find(item => item.delay === 10000);
+	const timer = [...h.timers.values()].findLast(item => item.delay === 10000);
 	assert(timer);
 	timer.fn();
 	await assertion;
-	assert.equal(h.sockets[0].listeners.get('open').size, 0);
-	assert.equal(h.sockets[0].listeners.get('close').size, 0);
+	assert.equal(h.sockets[0].listeners.get('open')?.size ?? 0, 0);
+	assert.equal(h.sockets[0].listeners.get('close')?.size ?? 0, 0);
 	assert.equal(h.refs[1].current.size, 0);
 	h.cleanup();
 });
@@ -215,4 +228,44 @@ test('a missing widget heartbeat acknowledgement closes the socket', () => {
 	assert.equal(h.sockets[0].readyState, 3);
 	assert.equal(h.intervals.size, 0);
 	h.cleanup();
+});
+
+test('widget waits for scripts and requires an authenticated overlay URL', () => {
+	const h = harness({ ready: false });
+	assert.equal(h.sockets.length, 0);
+	h.cleanup();
+	const noToken = harness({ token: false });
+	assert.equal(noToken.sockets.length, 0);
+	noToken.cleanup();
+});
+test('opening a socket does not release requests before registration acknowledgement', async () => {
+	const h = harness({ autoRegister: false });
+	h.sockets[0].open();
+	const pending = h.slime2.request('test', {});
+	await new Promise(resolve => setImmediate(resolve));
+	assert.equal(h.sockets[0].sent.length, 1);
+	assert.equal(h.sockets[0].sent[0].data.token.length, 48);
+	h.sockets[0].message({
+		widgetId: 'widget_test',
+		type: 'registered',
+		data: {},
+	});
+	await new Promise(resolve => setImmediate(resolve));
+	const request = h.sockets[0].sent.find(
+		message => message.type === 'request',
+	);
+	assert(request);
+	h.sockets[0].message({
+		widgetId: 'widget_test',
+		type: 'widget-response',
+		data: {
+			type: 'test',
+			request_id: request.data.request_id,
+			response: 'ok',
+		},
+	});
+	assert.equal(await pending, 'ok');
+	h.cleanup();
+	assert.equal(h.timers.size, 0);
+	assert.equal(h.intervals.size, 0);
 });

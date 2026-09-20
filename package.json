@@ -11,12 +11,15 @@
 		"build:debug": "tauri build --debug",
 		"tauri": "tauri",
 		"icon": "npm run tauri icon",
-		"before:dev": "npm run clean:target && npm run overlay:build && npm run icon && vite",
-		"before:build": "npm run clean:target && npm run overlay:build && npm run icon && tsc && vite build",
-		"overlay:install": "cd ./src-overlay && npm install && cd ..",
-		"overlay:dev": "npm run overlay:install && npm --prefix ./src-overlay/ run dev",
-		"overlay:build": "npm run overlay:install && npm --prefix ./src-overlay/ run build",
-		"clean:target": "cd ./src-tauri && cargo clean && cd .."
+		"before:dev": "npm run overlay:build && npm run icon && vite",
+		"before:build": "npm run overlay:build && npm run icon && tsc && vite build",
+		"overlay:install": "npm --prefix ./src-overlay ci",
+		"overlay:dev": "npm --prefix ./src-overlay run dev",
+		"overlay:build": "npm --prefix ./src-overlay run build",
+		"clean:target": "cd ./src-tauri && cargo clean && cd ..",
+		"test": "node --test tests/*.test.mjs",
+		"check": "tsc --noEmit",
+		"setup": "npm ci && npm run overlay:install"
 	},
 	"dependencies": {
 		"@ariakit/react": "0.4.37",

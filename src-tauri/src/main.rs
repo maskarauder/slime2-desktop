@@ -2,7 +2,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::{
-	collections::HashMap, sync::{Arc, Mutex, OnceLock, RwLock},
+	collections::HashMap,
+	sync::{Arc, Mutex, OnceLock, RwLock},
 };
 
 use sysinfo::ProcessRefreshKind;
@@ -15,13 +16,14 @@ mod commands;
 mod file;
 mod secret;
 mod server;
+mod session_tasks;
 mod tiktok;
 mod tiktok_lookup;
-mod youtube;
 mod watcher;
+mod youtube;
 
-mod twitch;
 mod account;
+mod twitch;
 
 // thanks to https://github.com/tauri-apps/tauri/discussions/6309#discussioncomment-10295527
 static APP_HANDLE: OnceLock<AppHandle> = OnceLock::new();
@@ -170,6 +172,7 @@ async fn main() {
 		.plugin(tauri_plugin_clipboard_manager::init())
 		.plugin(tauri_plugin_opener::init())
 		.manage(connections.clone())
+		.manage(server::access::WidgetAccess::default())
 		.manage(tiktok::TikTokConnections::default())
 		.manage(slime2_youtube_stream::YouTubeStreams::default())
 		.manage(AppState::default())
@@ -224,6 +227,7 @@ async fn main() {
 			youtube::open_youtube_chat_stream,
 			youtube::next_youtube_chat_batch,
 			youtube::close_youtube_chat_stream,
+			server::access::get_widget_access_token,
 			commands::send_websocket_message,
 			commands::start_tiktok_live,
 			commands::stop_tiktok_live,

@@ -1,0 +1,39 @@
+name: Verify Desktop
+on:
+    pull_request:
+    push:
+        branches: [main, 'feature/**']
+    workflow_dispatch:
+permissions:
+    contents: read
+concurrency:
+    group: verify-${{ github.ref }}
+    cancel-in-progress: true
+jobs:
+    windows:
+        runs-on: windows-latest
+        steps:
+            - uses: actions/checkout@v7
+            - uses: actions/setup-node@v6
+              with:
+                  node-version: '22'
+                  cache: npm
+                  cache-dependency-path: |
+                      package-lock.json
+                      src-overlay/package-lock.json
+            - uses: dtolnay/rust-toolchain@stable
+            - uses: swatinem/rust-cache@v2
+              with:
+                  workspaces: |
+                      src-tauri -> target
+                      src-tauri/youtube-stream -> target
+                      src-tauri/native-tests -> target
+            - run: npm run setup
+            - run: npm test
+            - run: npm run check
+            - run: npm run overlay:build
+            - run: npm run icon
+            - run: cargo test --locked --manifest-path src-tauri/native-tests/Cargo.toml
+            - run: cargo test --locked --manifest-path src-tauri/youtube-stream/Cargo.toml
+            - run: cargo test --locked --manifest-path src-tauri/Cargo.toml
+            - run: npm run build -- --bundles msi

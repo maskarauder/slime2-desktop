@@ -20,6 +20,7 @@ import TileMetasProvider from './contexts/tile_metas/TileMetasProvider';
 import TileSwapProvider from './contexts/tile_swap/TileSwapProvider';
 import WidgetMetasProvider from './contexts/widget_metas/WidgetMetasProvider';
 import { queryClient } from './helpers/queryClient';
+import { safeLogText } from './helpers/safeLog';
 import MainTabs from './pages/MainTabs';
 import './styles.css';
 
@@ -39,16 +40,18 @@ function forwardConsole(
 			firstData.startsWith(FROM_LOGGER_PREFIX)
 		) {
 			if (firstData.includes('[web:console]')) return;
-			original(firstData.substring(FROM_LOGGER_PREFIX.length), ...rest);
-		} else {
-			original(...data);
-			logger(
-				data
-					.map(item => {
-						return typeof item === 'string' ? item : JSON.stringify(item);
-					})
-					.join(' '),
+			original(
+				safeLogText(
+					firstData.substring(FROM_LOGGER_PREFIX.length),
+					...rest,
+				),
 			);
+		} else {
+			const safe = safeLogText(...data);
+			original(safe);
+			void logger(safe).catch(() => {
+				/* Never recurse into the failed logger. */
+			});
 		}
 	};
 }

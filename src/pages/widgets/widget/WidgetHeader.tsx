@@ -46,7 +46,9 @@ export default function WidgetHeader() {
 		<TileHeader
 			onBack={onBackWidget}
 			iconSrc={
-				tileMeta.icon ? getTileIconSrc(widgetId, tileMeta.icon) : undefined
+				tileMeta.icon
+					? getTileIconSrc(widgetId, tileMeta.icon)
+					: undefined
 			}
 			name={tileMeta.name}
 		>
@@ -157,8 +159,9 @@ function DevToolsButton() {
 								}}
 								actionText='Reset to Default'
 							>
-								Are you sure you want to <strong>irreversibly</strong> reset all
-								of this widget's values to their default values?
+								Are you sure you want to{' '}
+								<strong>irreversibly</strong> reset all of this
+								widget's values to their default values?
 							</GenericDeleteDialog>,
 						);
 					}}
@@ -223,14 +226,26 @@ function OverlayUrlButton() {
 			label='Overlay URL'
 			icon={ChainLinkSvg}
 			className='border-yellow-300 bg-yellow-300 from-yellow-300 to-amber-400 text-amber-900 over:outline-yellow-600'
-			onClick={() => {
-				openDialog(
-					'Overlay URL',
-					<OverlayURLDialog
-						link={createOverlayUrl(widgetId)}
-						devMode={settings.devMode}
-					/>,
-				);
+			onClick={async () => {
+				try {
+					const link = await createOverlayUrl(widgetId);
+					openDialog(
+						'Overlay URL',
+						<OverlayURLDialog
+							link={link}
+							devMode={settings.devMode}
+						/>,
+					);
+				} catch (error) {
+					console.error('Unable to create overlay URL:', error);
+					openDialog(
+						'Overlay URL',
+						<p>
+							Unable to load the overlay URL. Check Slime2’s log
+							and retry.
+						</p>,
+					);
+				}
 			}}
 		/>
 	);

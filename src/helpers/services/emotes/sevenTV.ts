@@ -1,8 +1,10 @@
+import { createCachedJsonGet } from '../requestCache';
 import axios from 'axios';
 
 const sevenTvAxios = axios.create({
 	baseURL: 'https://7tv.io/v3',
 });
+const cachedGet = createCachedJsonGet(sevenTvAxios);
 
 type SevenTvImageFile = {
 	name: string;
@@ -37,8 +39,7 @@ type SevenTvUserResponse = {
 };
 
 async function getEmoteSet(id: string): Promise<SevenTvEmoteSet | null> {
-	return sevenTvAxios
-		.get<SevenTvEmoteSet>(`/emote-sets/${id}`)
+	return cachedGet<SevenTvEmoteSet>(`/emote-sets/${id}`)
 		.then(response => response.data)
 		.catch(() => null);
 }
@@ -80,15 +81,14 @@ const sevenTvApi = {
 		const sevenTvPlatform = platform === 'youtube' ? 'google' : platform;
 		const [globalEmoteSet, user] = await Promise.all([
 			getEmoteSet('global'),
-			sevenTvAxios
-				.get<SevenTvUserResponse>(
-					`/users/${sevenTvPlatform}/${userId}`,
-					{
-						headers: {
-							'X-7tv-Missing-EmoteSet-Aware': '1',
-						},
+			cachedGet<SevenTvUserResponse>(
+				`/users/${sevenTvPlatform}/${userId}`,
+				{
+					headers: {
+						'X-7tv-Missing-EmoteSet-Aware': '1',
 					},
-				)
+				},
+			)
 				.then(response => response.data)
 				.catch(() => null),
 		]);

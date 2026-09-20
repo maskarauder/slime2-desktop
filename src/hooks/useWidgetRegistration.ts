@@ -1,7 +1,7 @@
 import useAccounts from '@/contexts/accounts/useAccounts';
 import { useSettings } from '@/contexts/settings/useSettings';
 import useWidgetMetas from '@/contexts/widget_metas/useWidgetMetas';
-import type { Account } from '@/helpers/json/accounts';
+import { resolveWidgetAccounts } from '@/helpers/accountRouting';
 import { loadWidgetSettings } from '@/helpers/json/widgetSettings';
 import { loadWidgetValues } from '@/helpers/json/widgetValues';
 import {
@@ -13,7 +13,7 @@ import logZodError from '@/helpers/zodError';
 import { loadTileMeta } from '@@/json/tileMeta';
 import { loadWidgetMeta } from '@@/json/widgetMeta';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { z } from 'zod/mini';
 
 export default function useWidgetRegistration() {
@@ -21,10 +21,15 @@ export default function useWidgetRegistration() {
 	const logWidgetEvents = settings.devMode && settings.logWidgetEvents;
 	const accounts = useAccounts();
 	const widgetMetas = useWidgetMetas();
-	const [registeredWidgets, setRegisteredWidgets] = useState(new Set<string>());
+	const [registeredWidgets, setRegisteredWidgets] = useState(
+		new Set<string>(),
+	);
+	const latest = useRef({ accounts, logWidgetEvents });
+	latest.current = { accounts, logWidgetEvents };
 
 	// sends widget values upon webhook registration / bot connection
 	useEffect(() => {
+		let disposed = false;
 		async function registerWidget(widgetId: string) {
 			const [settings, values, widgetMeta, tileMeta] = await Promise.all([
 				loadWidgetSettings(widgetId),
@@ -33,8 +38,9 @@ export default function useWidgetRegistration() {
 				loadTileMeta(widgetId),
 			]);
 
-			if (logWidgetEvents) {
-				sendLogEvents(widgetId, logWidgetEvents);
+			if (disposed) return;
+			if (latest.current.logWidgetEvents) {
+				await sendLogEvents(widgetId, true);
 			}
 
 			console.info(
@@ -42,7 +48,28 @@ export default function useWidgetRegistration() {
 			);
 
 			await sendWidgetValues(widgetId, settings, values);
-			setRegisteredWidgets(new Set([...registeredWidgets.values(), widgetId]));
+			await sendWidgetAccounts(
+				widgetId,
+				resolveWidgetAccounts(
+					widgetId,
+					widgetMeta,
+					latest.current.accounts,
+				).map(
+					account =>
+						account && {
+							id: account.id,
+							type: account.type,
+							service: account.service,
+							serviceId: account.serviceId,
+							username: account.username,
+							displayName: account.displayName,
+						},
+				),
+			);
+			if (!disposed)
+				setRegisteredWidgets(
+					previous => new Set([...previous, widgetId]),
+				);
 		}
 
 		// registration from bot
@@ -50,7 +77,9 @@ export default function useWidgetRegistration() {
 			event: CustomEventInit<{ widgetId: string }>,
 		) {
 			if (!event.detail?.widgetId) return;
-			registerWidget(event.detail.widgetId);
+			void registerWidget(event.detail.widgetId).catch(error =>
+				logZodError(error, {}),
+			);
 		}
 
 		addEventListener('bot-registration', botRegistrationListener);
@@ -62,8 +91,10 @@ export default function useWidgetRegistration() {
 				async event => {
 					try {
 						// just in case payload isn't formatted correctly
-						const { id: widgetId } = WidgetRegistration.parse(event.payload);
-						registerWidget(widgetId);
+						const { id: widgetId } = WidgetRegistration.parse(
+							event.payload,
+						);
+						await registerWidget(widgetId);
 					} catch (error) {
 						logZodError(error, event.payload);
 					}
@@ -71,17 +102,22 @@ export default function useWidgetRegistration() {
 			);
 
 		return () => {
+			disposed = true;
 			removeEventListener('bot-registration', botRegistrationListener);
 
-			unlistenPromise.then(unlisten => {
-				if (unlisten) unlisten();
-			});
+			unlistenPromise
+				.then(unlisten => {
+					if (unlisten) unlisten();
+				})
+				.catch(error => logZodError(error));
 		};
-	}, [logWidgetEvents, registeredWidgets]);
+	}, []);
 
 	useEffect(() => {
 		registeredWidgets.forEach(widgetId => {
-			sendLogEvents(widgetId, logWidgetEvents);
+			void sendLogEvents(widgetId, logWidgetEvents).catch(error =>
+				logZodError(error),
+			);
 		});
 	}, [settings.devMode, logWidgetEvents, registeredWidgets]);
 
@@ -94,30 +130,11 @@ export default function useWidgetRegistration() {
 						return;
 					}
 
-					const slottedAccounts = meta.accounts.map((accountSlot, index) => {
-						let slottedAccount: Account | null = null;
-
-						for (const account of Object.values(accounts)) {
-							if (account.reauthorize) {
-								continue;
-							}
-
-							if (
-								account.service === accountSlot.service &&
-								account.type === accountSlot.type &&
-								account.default
-							) {
-								slottedAccount = account;
-							}
-
-							if (account.widgets[widgetId] === index) {
-								slottedAccount = account;
-								break;
-							}
-						}
-
-						return slottedAccount;
-					});
+					const slottedAccounts = resolveWidgetAccounts(
+						widgetId,
+						meta,
+						accounts,
+					);
 
 					const widgetAccountsData = await Promise.all(
 						slottedAccounts.map(async account => {
@@ -132,7 +149,10 @@ export default function useWidgetRegistration() {
 								displayName: account.displayName,
 							};
 
-							if (account.type !== 'read' || account.service !== 'twitch') {
+							if (
+								account.type !== 'read' ||
+								account.service !== 'twitch'
+							) {
 								return accountData;
 							}
 
@@ -151,7 +171,7 @@ export default function useWidgetRegistration() {
 			);
 		}
 
-		sendAllAccountData();
+		void sendAllAccountData().catch(error => logZodError(error, {}));
 	}, [registeredWidgets, accounts, widgetMetas]);
 }
 

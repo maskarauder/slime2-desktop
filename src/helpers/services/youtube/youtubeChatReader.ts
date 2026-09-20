@@ -50,7 +50,7 @@ export async function readYouTubeChat(
 ) {
 	const { accountId, signal, accountName, onMessage } = options;
 	const { broadcast, poll, stream, delay, now } = dependencies;
-	const seen = new Set<string>();
+	const seen = new Map<string, string>();
 	let liveChatId: string | undefined;
 	let previousChatId: string | undefined;
 	let pageToken: string | undefined;
@@ -72,14 +72,30 @@ export async function readYouTubeChat(
 
 	async function processBatch(batch: YouTubeLiveChatMessageListResponse) {
 		let ended = Boolean(batch.offlineAt);
-		for (const message of batch.items ?? []) {
+		const messages = [...(batch.items ?? [])];
+		if (batch.activePollItem) messages.push(batch.activePollItem);
+		for (const message of messages) {
 			if (signal.aborted) return false;
 			if (message.snippet.type === 'chatEndedEvent') ended = true;
-			if (!message.id || seen.has(message.id)) continue;
+			if (!message.id) continue;
+			const type = message.snippet.type;
+			const key = `${message.snippet.liveChatId}:${message.id}`;
+			// Gift/poll IDs can be updated; tombstones supersede ordinary messages.
+			const signature =
+				type === 'giftEvent' || type === 'pollEvent'
+					? JSON.stringify([
+							type,
+							message.snippet.giftEventDetails,
+							message.snippet.pollDetails,
+						])
+					: type;
+			if (seen.get(key) === 'tombstone' || seen.get(key) === signature)
+				continue;
 			await onMessage(message);
-			seen.add(message.id);
+			seen.delete(key);
+			seen.set(key, signature);
 			if (seen.size > MAX_SEEN_MESSAGES) {
-				const oldest = seen.values().next().value;
+				const oldest = seen.keys().next().value;
 				if (oldest !== undefined) seen.delete(oldest);
 			}
 			receivedSinceHealthLog++;

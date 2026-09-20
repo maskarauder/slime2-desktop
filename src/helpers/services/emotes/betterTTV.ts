@@ -1,8 +1,10 @@
+import { createCachedJsonGet } from '../requestCache';
 import axios from 'axios';
 
 const bttvAxios = axios.create({
 	baseURL: 'https://api.betterttv.net/3/cached',
 });
+const cachedGet = createCachedJsonGet(bttvAxios);
 
 type BttvEmote = {
 	id: string;
@@ -21,18 +23,16 @@ type BttvEmote = {
 const bttvApi = {
 	async getUser(platform: 'twitch' | 'youtube', userId: string) {
 		const [globalEmotes, user] = await Promise.all([
-			bttvAxios
-				.get<BttvEmote[]>('/emotes/global')
+			cachedGet<BttvEmote[]>('/emotes/global')
 				.then(response => response.data)
 				.catch(() => null),
-			bttvAxios
-				.get<{
-					id: string;
-					bots: string[];
-					avatar: string;
-					channelEmotes: BttvEmote[];
-					sharedEmotes: BttvEmote[];
-				}>(`/users/${platform}/${userId}`)
+			cachedGet<{
+				id: string;
+				bots: string[];
+				avatar: string;
+				channelEmotes: BttvEmote[];
+				sharedEmotes: BttvEmote[];
+			}>(`/users/${platform}/${userId}`)
 				.then(response => response.data)
 				.catch(() => null),
 		]);

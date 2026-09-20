@@ -1,7 +1,6 @@
 import axios from 'axios';
 import {
 	type Account,
-	deleteTokens,
 	getTokens,
 	setTokens,
 	type Tokens,
@@ -12,13 +11,32 @@ import {
 	TWITCH_READ_SCOPES,
 } from './twitchConstants';
 
-const ONE_HOUR = 1000 * 60 * 60; // in milliseconds
+const VALIDATION_INTERVAL = 1000 * 60 * 55; // in milliseconds
 
 const twitchAuthAxios = axios.create({
 	baseURL: 'https://id.twitch.tv/oauth2',
+	timeout: 15_000,
 });
 
-const validationPromises = new Map<string, Promise<Tokens>>();
+export class TwitchReauthorizationError extends Error {}
+const startupValidated = new Set<string>();
+
+function invalidRefresh(error: unknown) {
+	if (!axios.isAxiosError(error)) return false;
+	const status = error.response?.status;
+	const data = error.response?.data as
+		{ message?: string; error?: string } | undefined;
+	return (
+		(status === 400 || status === 401) &&
+		(data?.error === 'invalid_grant' ||
+			/invalid refresh token/i.test(data?.message ?? ''))
+	);
+}
+
+const validationPromises = new Map<
+	string,
+	{ promise: Promise<Tokens>; rejected?: string }
+>();
 
 function accountScopes(type: Account['type']) {
 	switch (type) {
@@ -97,57 +115,91 @@ const twitchAuth = {
 		});
 	},
 
-	async getValidTokens(accountId: string): Promise<Tokens> {
-		// ensures that access token refreshes never happen simultaneously
-		const existingPromise = validationPromises.get(accountId);
-		if (existingPromise) return existingPromise;
-
-		async function validateToken(): Promise<Tokens> {
-			// remove from validation promises map after 10 seconds
-			setTimeout(() => {
-				validationPromises.delete(accountId);
-			}, 10 * 1000);
-
-			// throws if tokens don't exist
+	async getValidTokens(
+		accountId: string,
+		rejectedAccessToken?: string,
+	): Promise<Tokens> {
+		const existing = validationPromises.get(accountId);
+		if (existing) {
+			const result = await existing.promise;
+			if (
+				rejectedAccessToken &&
+				result.accessToken === rejectedAccessToken &&
+				existing.rejected !== rejectedAccessToken
+			)
+				return twitchAuth.getValidTokens(
+					accountId,
+					rejectedAccessToken,
+				);
+			return result;
+		}
+		const promise = (async () => {
 			let tokens = await getTokens(accountId);
-
-			// need to validate token every hour
-			if (Date.now() - tokens.validatedAt > ONE_HOUR) {
+			// A concurrent request may already have rotated the rejected token.
+			const rejected = rejectedAccessToken === tokens.accessToken;
+			if (
+				!rejected &&
+				startupValidated.has(accountId) &&
+				Date.now() - tokens.validatedAt < VALIDATION_INTERVAL
+			)
+				return tokens;
+			if (!rejected) {
 				try {
 					await twitchAuth.validateAccessToken(tokens.accessToken);
-				} catch (error) {
-					console.debug(
-						`Twitch Access Token for ${accountId} no longer valid! Refreshing...`,
+					tokens = await setTokens(
+						accountId,
+						tokens.accessToken,
+						tokens.refreshToken,
+						{
+							clientId: tokens.clientId,
+							clientSecret: tokens.clientSecret,
+							expiresAt: tokens.expiresAt,
+						},
 					);
-
-					// access token might be expired, refresh it
-					try {
-						const { data } = await twitchAuth.refreshAccessToken(
-							tokens.refreshToken,
-						);
-
-						tokens = await setTokens(
-							accountId,
-							data.access_token,
-							data.refresh_token,
-						);
-					} catch (error) {
-						console.error(`Twitch Access Token could not be refreshed!`, error);
-
-						// access token likely revoked, delete the tokens
-						deleteTokens(accountId);
-
+					startupValidated.add(accountId);
+					return tokens;
+				} catch (error) {
+					if (
+						!axios.isAxiosError(error) ||
+						error.response?.status !== 401
+					)
 						throw error;
-					}
 				}
 			}
-
-			return tokens;
+			try {
+				const { data } = await twitchAuth.refreshAccessToken(
+					tokens.refreshToken,
+				);
+				tokens = await setTokens(
+					accountId,
+					data.access_token,
+					data.refresh_token,
+					{
+						clientId: tokens.clientId,
+						clientSecret: tokens.clientSecret,
+						expiresAt: tokens.expiresAt,
+					},
+				);
+				startupValidated.add(accountId);
+				return tokens;
+			} catch (error) {
+				if (invalidRefresh(error))
+					throw new TwitchReauthorizationError(
+						'Twitch rejected the refresh token. Reconnect this account.',
+					);
+				throw error;
+			}
+		})();
+		validationPromises.set(accountId, {
+			promise,
+			rejected: rejectedAccessToken,
+		});
+		try {
+			return await promise;
+		} finally {
+			if (validationPromises.get(accountId)?.promise === promise)
+				validationPromises.delete(accountId);
 		}
-
-		const promise = validateToken();
-		validationPromises.set(accountId, promise);
-		return promise;
 	},
 };
 

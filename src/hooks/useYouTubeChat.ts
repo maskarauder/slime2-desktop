@@ -1,3 +1,4 @@
+import { relatedWidgetIds } from '@/helpers/accountRouting';
 import useAccounts from '@/contexts/accounts/useAccounts';
 import { useAccountsDispatch } from '@/contexts/accounts/useAccountsDispatch';
 import useWidgetMetas from '@/contexts/widget_metas/useWidgetMetas';
@@ -28,7 +29,11 @@ export default function useYouTubeChat() {
 		const account = accountsRef.current[accountId];
 		if (!account) return;
 
-		const widgetIds = relatedWidgetIds(account, widgetMetasRef.current);
+		const widgetIds = relatedWidgetIds(
+			account,
+			accountsRef.current,
+			widgetMetasRef.current,
+		);
 		await Promise.all(
 			widgetIds.map(widgetId =>
 				sendYouTubeEvent(
@@ -91,7 +96,9 @@ export default function useYouTubeChat() {
 	useEffect(() => {
 		const neededAccounts = new Set(
 			Object.values(accounts)
-				.filter(account => isYouTubeAccountNeeded(account, widgetMetas))
+				.filter(account =>
+					isYouTubeAccountNeeded(account, accounts, widgetMetas),
+				)
 				.map(account => account.id),
 		);
 
@@ -140,28 +147,13 @@ export default function useYouTubeChat() {
 
 function isYouTubeAccountNeeded(
 	account: Account,
+	accounts: ReturnType<typeof useAccounts>,
 	widgetMetas: ReturnType<typeof useWidgetMetas>,
 ) {
 	return (
 		!account.reauthorize &&
 		account.service === 'youtube' &&
 		account.type === 'read' &&
-		relatedWidgetIds(account, widgetMetas).length > 0
+		relatedWidgetIds(account, accounts, widgetMetas).length > 0
 	);
-}
-
-function relatedWidgetIds(
-	account: Account,
-	widgetMetas: ReturnType<typeof useWidgetMetas>,
-) {
-	return Object.entries(widgetMetas)
-		.filter(([widgetId, widgetMeta]) =>
-			widgetMeta.accounts.some(
-				(slot, index) =>
-					slot.service === 'youtube' &&
-					slot.type === 'read' &&
-					(account.widgets[widgetId] === index || account.default),
-			),
-		)
-		.map(([widgetId]) => widgetId);
 }

@@ -1,19 +1,22 @@
+import { relatedWidgetIds } from '@/helpers/accountRouting';
 import useAccounts from '@/contexts/accounts/useAccounts';
 import { useAccountsDispatch } from '@/contexts/accounts/useAccountsDispatch';
 import useWidgetMetas from '@/contexts/widget_metas/useWidgetMetas';
 import { startTikTokLive, stopTikTokLive } from '@/helpers/commands';
-import { deleteTokens, type Account } from '@/helpers/json/accounts';
+import { type Account } from '@/helpers/json/accounts';
 import { sendTikTokEvent } from '@/helpers/widgetMessage';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { useEffect, useRef, useState } from 'react';
 
 type TikTokBackendMessage = {
 	accountId: string;
+	sessionId: string;
 	message: string;
 };
 
 type TikTokBackendStatus = {
 	accountId: string;
+	sessionId: string;
 	state:
 		| 'connecting'
 		| 'connected'
@@ -46,114 +49,156 @@ export default function useTikTokChat() {
 	const accountsRef = useRef(accounts);
 	const widgetMetasRef = useRef(widgetMetas);
 	const updateAccountRef = useRef(updateAccount);
-	const sessions = useRef(new Set<string>());
+	const sessions = useRef(new Map<string, string>());
+	const operations = useRef(new Map<string, Promise<void>>());
 	const [listenersReady, setListenersReady] = useState(false);
+	const [retryTick, setRetryTick] = useState(0);
+	accountsRef.current = accounts;
+	widgetMetasRef.current = widgetMetas;
+	updateAccountRef.current = updateAccount;
 
-	useEffect(() => {
-		accountsRef.current = accounts;
-	}, [accounts]);
-
-	useEffect(() => {
-		widgetMetasRef.current = widgetMetas;
-	}, [widgetMetas]);
-
-	useEffect(() => {
-		updateAccountRef.current = updateAccount;
-	}, [updateAccount]);
+	// Serialize native mutations; a delayed stop can never cancel a newer reader.
+	function enqueue(accountId: string, operation: () => Promise<void>) {
+		const task = (operations.current.get(accountId) ?? Promise.resolve())
+			.catch(() => {})
+			.then(operation)
+			.finally(() => {
+				if (operations.current.get(accountId) === task)
+					operations.current.delete(accountId);
+			});
+		operations.current.set(accountId, task);
+		return task;
+	}
 
 	useEffect(() => {
 		let disposed = false;
-		let unlistenMessage: VoidFunction | undefined;
-		let unlistenStatus: VoidFunction | undefined;
+		let unlisteners: VoidFunction[] = [];
 		const appWindow = getCurrentWebviewWindow();
-
-		async function markForReauthorization(
-			accountId: string,
-			message?: string,
-		) {
-			const account = accountsRef.current[accountId];
-			if (!account || account.reauthorize) return;
-
-			console.error(
-				`TikTok LIVE credentials need attention for ${account.displayName}:`,
-				message ?? 'Euler Stream rejected the connection.',
-			);
-			sessions.current.delete(accountId);
-			updateAccountRef.current({ ...account, reauthorize: true });
-
+		const queue: {
+			accountId: string;
+			sessionId: string;
+			chat: NonNullable<ReturnType<typeof normalizeChatEvent>>;
+		}[] = [];
+		const seen = new Set<string>();
+		let processing = false;
+		let lastOverflow = 0;
+		async function drain() {
+			if (processing) return;
+			processing = true;
 			try {
-				await deleteTokens(accountId);
-			} catch (error) {
-				console.error(error);
-			}
-		}
-
-		Promise.all([
-			appWindow.listen<TikTokBackendMessage>(
-				'tiktok-live-message',
-				event => {
-					if (!sessions.current.has(event.payload.accountId)) return;
-
-					const account =
-						accountsRef.current[event.payload.accountId];
-					if (!account) return;
-
-					for (const envelope of parseEulerStreamMessage(
-						event.payload.message,
-					)) {
-						const chatEvent = normalizeChatEvent(envelope);
-						if (!chatEvent) continue;
-
-						const widgetIds = relatedWidgetIds(
-							account,
-							accountsRef.current,
-							widgetMetasRef.current,
-						);
-						void Promise.all(
-							widgetIds.map(widgetId =>
+				while (!disposed && queue.length) {
+					const { accountId, sessionId, chat } = queue.shift()!;
+					const account = accountsRef.current[accountId];
+					if (
+						!account ||
+						sessions.current.get(accountId) !== sessionId
+					)
+						continue;
+					try {
+						await Promise.all(
+							relatedWidgetIds(
+								account,
+								accountsRef.current,
+								widgetMetasRef.current,
+							).map(widgetId =>
 								sendTikTokEvent(
 									account.id,
 									widgetId,
-									chatEvent.id,
-									chatEvent.type,
-									chatEvent.timestamp,
-									chatEvent.data,
+									chat.id,
+									chat.type,
+									chat.timestamp,
+									chat.data,
 								),
 							),
-						).catch(error => {
-							console.error(
-								'Unable to forward TikTok LIVE chat:',
-								error,
-							);
-						});
+						);
+					} catch (error) {
+						console.error(
+							'Unable to forward TikTok LIVE chat:',
+							error,
+						);
 					}
+				}
+			} finally {
+				processing = false;
+			}
+		}
+		function stop(accountId: string, sessionId: string) {
+			sessions.current.delete(accountId);
+			void enqueue(accountId, () =>
+				stopTikTokLive(accountId, sessionId),
+			).catch(error =>
+				console.error('Unable to stop TikTok LIVE chat:', error),
+			);
+		}
+		Promise.allSettled([
+			appWindow.listen<TikTokBackendMessage>(
+				'tiktok-live-message',
+				event => {
+					const { accountId, sessionId, message } = event.payload;
+					if (
+						disposed ||
+						sessions.current.get(accountId) !== sessionId
+					)
+						return;
+					for (const envelope of parseEulerStreamMessage(message)) {
+						const chat = normalizeChatEvent(envelope);
+						if (!chat) continue;
+						const key = JSON.stringify([accountId, chat.id]);
+						if (seen.has(key)) continue;
+						seen.add(key);
+						while (seen.size > 2000)
+							seen.delete(seen.values().next().value!);
+						if (queue.length >= 256) {
+							queue.shift();
+							if (Date.now() - lastOverflow > 60_000) {
+								lastOverflow = Date.now();
+								console.warn(
+									'TikTok display queue reached its limit; dropping the oldest pending message.',
+								);
+							}
+						}
+						queue.push({ accountId, sessionId, chat });
+					}
+					void drain();
 				},
 			),
 			appWindow.listen<TikTokBackendStatus>(
 				'tiktok-live-status',
 				event => {
-					const { accountId, state, code, message } = event.payload;
-					if (!sessions.current.has(accountId)) return;
-
-					if (state === 'reauthorize') {
-						void markForReauthorization(accountId, message);
+					const { accountId, sessionId, state, code, message } =
+						event.payload;
+					if (
+						disposed ||
+						sessions.current.get(accountId) !== sessionId
+					)
 						return;
-					}
-
-					if (state === 'connected') {
+					const account = accountsRef.current[accountId];
+					if (state === 'reauthorize') {
+						stop(accountId, sessionId);
+						if (account && !account.reauthorize)
+							updateAccountRef.current({
+								...account,
+								reauthorize: true,
+							});
+						// Preserve the stored key even when it needs user attention.
+						console.error(
+							`TikTok LIVE credentials need attention for ${account?.displayName ?? accountId}:`,
+							message,
+						);
+					} else if (state === 'error') {
+						stop(accountId, sessionId);
+						console.error(
+							`TikTok LIVE connection stopped${code ? ` (${code})` : ''}:`,
+							message,
+						);
+					} else if (state === 'connected') {
 						console.info(
-							`TikTok LIVE connected for ${accountsRef.current[accountId]?.displayName ?? accountId}.`,
+							`TikTok LIVE connected for ${account?.displayName ?? accountId}.`,
 						);
 					} else if (state === 'reconnecting') {
 						console.warn(
 							`TikTok LIVE reconnecting${code ? ` (${code})` : ''}:`,
-							message ??
-								'Connection closed; retrying in 15 seconds.',
-						);
-					} else if (state === 'error') {
-						console.error(
-							`TikTok LIVE connection stopped${code ? ` (${code})` : ''}:`,
-							message ?? 'Unknown connection error.',
+							message,
 						);
 					} else if (state === 'offline') {
 						console.info(
@@ -162,87 +207,83 @@ export default function useTikTokChat() {
 					}
 				},
 			),
-		])
-			.then(unlistenFunctions => {
-				if (disposed) {
-					unlistenFunctions.forEach(unlisten => {
-						unlisten();
-					});
-					return;
-				}
-
-				[unlistenMessage, unlistenStatus] = unlistenFunctions;
-				setListenersReady(true);
-			})
-			.catch(error => {
-				console.error(
-					'Unable to listen for TikTok LIVE events:',
-					error,
-				);
-			});
-
+		]).then(results => {
+			const ready = results.flatMap(result =>
+				result.status === 'fulfilled' ? [result.value] : [],
+			);
+			if (disposed || ready.length !== results.length) {
+				ready.forEach(unlisten => unlisten());
+				if (!disposed)
+					console.error(
+						'Unable to register all TikTok LIVE listeners.',
+					);
+				return;
+			}
+			unlisteners = ready;
+			setListenersReady(true);
+		});
+		const retry = setInterval(
+			() => setRetryTick(value => value + 1),
+			300_000,
+		);
 		return () => {
 			disposed = true;
-			unlistenMessage?.();
-			unlistenStatus?.();
+			clearInterval(retry);
+			unlisteners.forEach(unlisten => unlisten());
+			queue.length = 0;
+			seen.clear();
 		};
 	}, []);
 
 	useEffect(() => {
 		if (!listenersReady) return;
-
-		const neededAccounts = new Map(
+		const needed = new Map(
 			Object.values(accounts)
 				.filter(account =>
 					isTikTokAccountNeeded(account, accounts, widgetMetas),
 				)
 				.map(account => [account.id, account]),
 		);
-
-		for (const accountId of sessions.current) {
-			if (neededAccounts.has(accountId)) continue;
-
+		for (const [accountId, sessionId] of sessions.current) {
+			if (needed.has(accountId)) continue;
 			sessions.current.delete(accountId);
-			void stopTikTokLive(accountId).catch(error => {
-				console.error('Unable to stop TikTok LIVE chat:', error);
-			});
-		}
-
-		for (const [accountId, account] of neededAccounts) {
-			if (sessions.current.has(accountId)) continue;
-
-			sessions.current.add(accountId);
-			void startTikTokLive(accountId, account.serviceId).catch(
-				async error => {
-					if (!sessions.current.delete(accountId)) return;
-
-					console.error('Unable to start TikTok LIVE chat:', error);
-					const currentAccount = accountsRef.current[accountId];
-					if (!currentAccount || currentAccount.reauthorize) return;
-
-					updateAccountRef.current({
-						...currentAccount,
-						reauthorize: true,
-					});
-					try {
-						await deleteTokens(accountId);
-					} catch (deleteError) {
-						console.error(deleteError);
-					}
-				},
+			void enqueue(accountId, () =>
+				stopTikTokLive(accountId, sessionId),
+			).catch(error =>
+				console.error('Unable to stop TikTok LIVE chat:', error),
 			);
 		}
-	}, [accounts, listenersReady, widgetMetas]);
+		for (const [accountId, account] of needed) {
+			if (sessions.current.has(accountId)) continue;
+			const sessionId = crypto.randomUUID();
+			sessions.current.set(accountId, sessionId);
+			void enqueue(accountId, async () => {
+				if (sessions.current.get(accountId) !== sessionId) return;
+				await startTikTokLive(accountId, account.serviceId, sessionId);
+			}).catch(error => {
+				if (sessions.current.get(accountId) !== sessionId) return;
+				sessions.current.delete(accountId);
+				console.error(
+					'Unable to start TikTok LIVE chat; retrying in 5 minutes:',
+					error,
+				);
+			});
+		}
+	}, [accounts, listenersReady, widgetMetas, retryTick]);
 
-	useEffect(() => {
-		const activeSessions = sessions.current;
-		return () => {
-			for (const accountId of activeSessions) {
-				void stopTikTokLive(accountId);
+	useEffect(
+		() => () => {
+			for (const [accountId, sessionId] of sessions.current) {
+				void enqueue(accountId, () =>
+					stopTikTokLive(accountId, sessionId),
+				).catch(error =>
+					console.error('Unable to stop TikTok LIVE chat:', error),
+				);
 			}
-			activeSessions.clear();
-		};
-	}, []);
+			sessions.current.clear();
+		},
+		[],
+	);
 }
 
 function isTikTokAccountNeeded(
@@ -256,34 +297,6 @@ function isTikTokAccountNeeded(
 		account.type === 'read' &&
 		relatedWidgetIds(account, accounts, widgetMetas).length > 0
 	);
-}
-
-function relatedWidgetIds(
-	account: Account,
-	accounts: ReturnType<typeof useAccounts>,
-	widgetMetas: ReturnType<typeof useWidgetMetas>,
-) {
-	return Object.entries(widgetMetas)
-		.filter(([widgetId, widgetMeta]) =>
-			widgetMeta.accounts.some((slot, index) => {
-				if (slot.service !== 'tiktok' || slot.type !== 'read') {
-					return false;
-				}
-
-				const manuallySelectedAccount = Object.values(accounts).find(
-					otherAccount =>
-						!otherAccount.reauthorize &&
-						otherAccount.service === 'tiktok' &&
-						otherAccount.type === 'read' &&
-						otherAccount.widgets[widgetId] === index,
-				);
-
-				return manuallySelectedAccount
-					? manuallySelectedAccount.id === account.id
-					: account.default;
-			}),
-		)
-		.map(([widgetId]) => widgetId);
 }
 
 function parseEulerStreamMessage(message: string): TikTokEventEnvelope[] {

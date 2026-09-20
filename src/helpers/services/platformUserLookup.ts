@@ -1,3 +1,4 @@
+import { resolveWidgetAccounts } from '../accountRouting';
 import { lookupTikTokUserId } from '../commands';
 import type { Accounts } from '../json/accounts';
 import { loadWidgetMeta } from '../json/widgetMeta';
@@ -53,21 +54,12 @@ export async function resolveWidgetPlatformUser(
 	const { account_id: accountId, platform } = payload;
 	const username = normalizeLookupUsername(platform, payload.username);
 	const meta = await loadWidgetMeta(widgetId);
-	const candidates = Object.values(accounts).filter(
+	const assigned = resolveWidgetAccounts(widgetId, meta, accounts).some(
 		account =>
+			account?.id === accountId &&
 			account.service === platform &&
-			account.type === 'read' &&
-			!account.reauthorize,
+			account.type === 'read',
 	);
-	const assigned = meta.accounts.some((slot, index) => {
-		if (slot.service !== platform || slot.type !== 'read') return false;
-		// An explicit selection wins over a default account, as in registration.
-		const explicit = candidates.find(
-			account => account.widgets[widgetId] === index,
-		);
-		const defaults = candidates.filter(account => account.default);
-		return (explicit ?? defaults[defaults.length - 1])?.id === accountId;
-	});
 	if (!assigned)
 		throw new LookupError(
 			`Assign a connected ${platform} read account to this widget before looking up usernames.`,

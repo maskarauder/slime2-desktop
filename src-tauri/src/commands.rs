@@ -102,6 +102,7 @@ pub async fn send_websocket_message(
 #[tauri::command]
 pub async fn start_tiktok_live(
 	account_id: String,
+	session_id: String,
 	unique_id: String,
 	app_handle: AppHandle,
 	state: State<'_, AppState>,
@@ -117,7 +118,7 @@ pub async fn start_tiktok_live(
 	}
 
 	connections
-		.start(account_id, unique_id, tokens.access_token, app_handle)
+		.start(account_id, session_id, unique_id, tokens.access_token, app_handle)
 		.await;
 	Ok(())
 }
@@ -125,9 +126,10 @@ pub async fn start_tiktok_live(
 #[tauri::command]
 pub async fn stop_tiktok_live(
 	account_id: String,
+	session_id: String,
 	connections: State<'_, tiktok::TikTokConnections>,
 ) -> Result<(), String> {
-	connections.stop(&account_id).await;
+	connections.stop(&account_id, &session_id).await;
 	Ok(())
 }
 
