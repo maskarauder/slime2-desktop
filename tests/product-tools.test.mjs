@@ -239,6 +239,44 @@ test('cancelled simulations stop dispatch immediately', async () => {
 	});
 	assert.equal(count, 1);
 });
+test('Twitch GIF simulation sends native GIF fragments to overlays without bot replies', async () => {
+	const sent = [],
+		api = loadTs('src/helpers/simulator.ts', {
+			'./widgetMessage': {
+				sendTwitchEvent: async (...args) => sent.push(args),
+			},
+		});
+	await api.simulateBurst({
+		platform: 'twitch',
+		kind: 'gif',
+		name: 'Fixture Viewer',
+		text: 'A GIF!',
+		widgetIds: ['left', 'right', 'vertical'],
+		count: 1,
+		interval: 1000,
+		signal: new AbortController().signal,
+		onProgress() {},
+	});
+	assert.equal(sent.length, 3);
+	assert.equal(new Set(sent.map(args => args[2])).size, 1);
+	for (const args of sent) {
+		assert.equal(args[3], 'channel.chat.message');
+		assert.equal(args[4], '1');
+		const event = args[6];
+		assert.equal(event.message_type, 'text');
+		assert.equal(event.message.text, 'A GIF! [GIF]');
+		assert.equal(event.message.fragments[1].type, 'gif');
+		assert.equal(event.message.fragments[1].gif.id, 'simulation-gif');
+		assert.match(event.message.fragments[1].gif.url, /^https:\/\/.+\.gif$/);
+		assert.equal(args.at(-2), true);
+		assert.equal(args.at(-1), false);
+	}
+	for (const platform of ['youtube', 'tiktok'])
+		assert.throws(
+			() => api.makeSimulation(platform, 'gif', 'Viewer', 'Hi'),
+			/only available for Twitch/,
+		);
+});
 test('TikTok final gift streaks retain string IDs and suppress intermediate updates', () => {
 	const { normalizeChatEvent } = loadTs(
 		'src/helpers/services/tiktok/tiktokEvents.ts',

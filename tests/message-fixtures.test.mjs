@@ -30,7 +30,7 @@ function widgetHarness() {
 	return { api, sent, bot };
 }
 
-test('Twitch fixtures preserve emotes, memberships, gifts and deletion targets through widget and bot routing', async () => {
+test('Twitch fixtures preserve emotes, GIF URLs, memberships, gifts and deletion targets through widget and bot routing', async () => {
 	const h = widgetHarness();
 	const events = fixture('twitch').notifications;
 	for (const { metadata, payload } of events) {
@@ -56,6 +56,21 @@ test('Twitch fixtures preserve emotes, memberships, gifts and deletion targets t
 		assert.deepEqual(
 			JSON.parse(JSON.stringify(h.bot[i].detail.data)),
 			message.data,
+		);
+	}
+	const gifEvents = h.sent
+		.map(({ message }) => message.data.data)
+		.filter(event => event.message?.fragments.some(f => f.type === 'gif'));
+	assert.equal(gifEvents.length, 2);
+	assert.equal(gifEvents[0].message.fragments.length, 1);
+	assert.equal(gifEvents[1].message.fragments[1].type, 'emote');
+	for (const event of gifEvents) {
+		const fragment = event.message.fragments.find(f => f.type === 'gif');
+		assert.equal(event.message_type, 'text');
+		assert.equal(fragment.gif.id, 'fixture-gif-1');
+		assert.equal(
+			fragment.gif.url,
+			'https://media.example.invalid/gifs/fixture.gif?provider=fixture%2Bonly&width=320&repeat=0',
 		);
 	}
 });

@@ -33,6 +33,7 @@ export default function PlatformSimulator() {
 		['chat', 'Chat message'],
 		['emote', 'Inline emote'],
 	];
+	if (platform === 'twitch') kinds.push(['gif', 'GIF message']);
 	if (platform === 'youtube')
 		kinds.push(
 			['superChat', 'Super Chat'],
@@ -82,8 +83,8 @@ export default function PlatformSimulator() {
 		<ToolSection title='Cross-platform chat test'>
 			<p className='text-3.5'>
 				Sends local test events to overlays without live chat API
-				requests or bot replies. Emote images may load from their image
-				host.
+				requests or bot replies. Emote and GIF images may load from
+				their image host.
 			</p>
 			<fieldset
 				disabled={busy}

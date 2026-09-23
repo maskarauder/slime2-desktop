@@ -97,7 +97,7 @@ Implementation: `src-tauri/src/backup.rs`, `src-tauri/src/commands/backup.rs`,
 ## Simulator
 
 Event Simulator adds Twitch, YouTube and TikTok previews, native emotes,
-YouTube paid/membership events and TikTok gifts. Select a compatible overlay or
+Twitch GIF messages, YouTube paid/membership events and TikTok gifts. Select a compatible overlay or
 all compatible overlays. Bursts are sequential, capped at 100 events with at
 least 100 ms between events. Stop or leaving the panel cancels a burst.
 Previews need no live account, request no chat API and dispatch no bot events.
@@ -112,6 +112,9 @@ no gift animation/video is downloaded. Widgets decide which events to render.
 Implementation: `src/helpers/simulator.ts`,
 `src/pages/simulator/PlatformSimulator.tsx`, `src/helpers/widgetMessage.ts`,
 `src/helpers/services/tiktok/tiktokEvents.ts`.
+
+See [TWITCH-GIFS.md](TWITCH-GIFS.md) for GIF rendering, resource limits and
+updating existing widget copies.
 
 ## Updates and About
 

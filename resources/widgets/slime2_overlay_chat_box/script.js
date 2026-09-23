@@ -44,6 +44,8 @@ const YouTube = {
 };
 
 const NO_THIRD_PARTY_EMOTES = new Map();
+const GIF_IMAGE_CLEANUP = new WeakMap();
+const IMAGE_LOAD_TIMEOUT = 5000;
 
 // Listeners
 // ***************************************************************************
@@ -241,6 +243,10 @@ function widgetValuesListener(event) {
 	].forEach(([className, value]) => {
 		toggleClass(className, value);
 	});
+
+	if (Widget.values.get('use-static-emotes')) {
+		releaseMessageGifs(widgetElement);
+	}
 
 	[
 		['multi-emote-size', Widget.values.get('multi-emote-size') ?? 2],
@@ -672,6 +678,7 @@ async function handleChatMessage(data, eventDate, platform = 'twitch') {
 	// build message text
 	/** @type {HTMLSpanElement} */
 	const contentElement = messageTemplateClone.querySelector('.content');
+	const gifBudget = { remaining: 1 };
 	message.fragments.forEach((fragment, index) => {
 		const pluralmindFragment = proxiedMessage?.changedFragments?.[index];
 
@@ -681,7 +688,11 @@ async function handleChatMessage(data, eventDate, platform = 'twitch') {
 			if (pluralmindFragment !== null) {
 				contentElement.append(
 					...fragmentsWithClass(
-						buildMessageFragments(pluralmindFragment, platform),
+						buildMessageFragments(
+							pluralmindFragment,
+							platform,
+							gifBudget,
+						),
 						'fragment-proxied',
 					),
 				);
@@ -690,12 +701,14 @@ async function handleChatMessage(data, eventDate, platform = 'twitch') {
 			// append original fragment
 			contentElement.append(
 				...fragmentsWithClass(
-					buildMessageFragments(fragment, platform),
+					buildMessageFragments(fragment, platform, gifBudget),
 					'fragment-original',
 				),
 			);
 		} else {
-			contentElement.append(...buildMessageFragments(fragment, platform));
+			contentElement.append(
+				...buildMessageFragments(fragment, platform, gifBudget),
+			);
 		}
 	});
 
@@ -738,21 +751,7 @@ async function handleChatMessage(data, eventDate, platform = 'twitch') {
 	// wait for all images to load
 	await Promise.allSettled(
 		[...messageTemplateClone.querySelectorAll('img').values()].map(
-			async imageElement => {
-				return new Promise(resolve => {
-					if (imageElement.complete) {
-						resolve();
-						return;
-					}
-
-					function onLoad() {
-						imageElement.removeEventListener('load', onLoad);
-						resolve();
-					}
-
-					imageElement.addEventListener('load', onLoad);
-				});
-			},
+			waitForMessageImage,
 		),
 	);
 
@@ -886,6 +885,9 @@ function displayMessage(messageTemplateClone, messageId) {
 
 	// append clone
 	widgetBody.appendChild(messageTemplateClone);
+	activateMessageGifs(
+		widgetBody.querySelector(`.message[data-message-id='${messageId}']`),
+	);
 
 	// add observer
 	resizeObserver.observe(
@@ -895,6 +897,7 @@ function displayMessage(messageTemplateClone, messageId) {
 
 /** @param {HTMLElement} messageElement */
 function hideMessage(messageElement) {
+	releaseMessageGifs(messageElement);
 	// immediately remove element from DOM if no animation
 	if ((Widget.values.get('exit-animation') ?? 'none') === 'none') {
 		messageElement.remove();
@@ -914,8 +917,11 @@ function handleChatMessageDelete(data) {
 	Widget.messagesDeleted.add(message_id);
 	const messageElement = document
 		.getElementById('widget')
-		.querySelector(`[data-message-id='${message_id}']`)
-		?.remove();
+		.querySelector(`[data-message-id='${message_id}']`);
+	if (messageElement) {
+		releaseMessageGifs(messageElement);
+		messageElement.remove();
+	}
 }
 
 function handleChatClear(eventDate) {
@@ -923,7 +929,10 @@ function handleChatClear(eventDate) {
 	document
 		.getElementById('widget')
 		.querySelectorAll('.message')
-		.forEach(element => element.remove());
+		.forEach(element => {
+			releaseMessageGifs(element);
+			element.remove();
+		});
 }
 
 function handleChatClearUserMessages(data, eventDate) {
@@ -932,7 +941,10 @@ function handleChatClearUserMessages(data, eventDate) {
 	document
 		.getElementById('widget')
 		.querySelectorAll(`[data-user-id='${target_user_id}']`)
-		.forEach(element => element.remove());
+		.forEach(element => {
+			releaseMessageGifs(element);
+			element.remove();
+		});
 }
 
 // Element Builders
@@ -994,8 +1006,14 @@ function buildBadges(badges) {
 }
 
 /** @returns {DocumentFragment[]} */
-function buildMessageFragments(fragment, platform = 'twitch') {
+function buildMessageFragments(
+	fragment,
+	platform = 'twitch',
+	gifBudget = { remaining: 1 },
+) {
 	switch (fragment.type) {
+		case 'gif':
+			return [buildGifFragment(fragment, platform, gifBudget)];
 		case 'emote':
 			return [buildEmoteFragment(fragment, platform)];
 		case 'mention':
@@ -1006,6 +1024,109 @@ function buildMessageFragments(fragment, platform = 'twitch') {
 		default:
 			return buildTextFragments(fragment, platform);
 	}
+}
+
+function buildGifFragment(fragment, platform, gifBudget) {
+	const text =
+		typeof fragment.text === 'string' && fragment.text.trim()
+			? fragment.text
+			: '[GIF]';
+	const fallback = buildParsedTextFragment({ type: 'text', text });
+	const source = fragment.gif?.url;
+	if (
+		platform !== 'twitch' ||
+		Widget.values.get('use-static-emotes') ||
+		gifBudget.remaining <= 0 ||
+		typeof source !== 'string' ||
+		source.length > 8192
+	)
+		return fallback;
+
+	try {
+		const url = new URL(source);
+		if (url.protocol !== 'https:' || url.username || url.password) {
+			return fallback;
+		}
+	} catch {
+		return fallback;
+	}
+
+	gifBudget.remaining--;
+	const wrapper = document.createElement('span');
+	wrapper.className = 'gif-fragment';
+	const fallbackElement = fallback.querySelector('.text');
+	fallbackElement.hidden = true;
+	wrapper.append(fallback);
+	const image = document.createElement('img');
+	image.className = 'chat-gif';
+	image.alt = text;
+	image.width = 280;
+	image.height = 160;
+	image.decoding = 'async';
+	image.referrerPolicy = 'no-referrer';
+	// Preserve the complete provider URL. Fetch only once this message is shown.
+	image.dataset.gifSrc = source;
+	wrapper.append(image);
+	const result = document.createDocumentFragment();
+	result.append(wrapper);
+	return result;
+}
+
+function activateMessageGifs(messageElement) {
+	messageElement?.querySelectorAll('.chat-gif').forEach(image => {
+		if (Widget.values.get('use-static-emotes')) {
+			releaseGifImage(image);
+			return;
+		}
+		const source = image.dataset.gifSrc;
+		if (!source) return;
+		delete image.dataset.gifSrc;
+		function cleanup() {
+			clearTimeout(timeout);
+			image.removeEventListener('load', cleanup);
+			image.removeEventListener('error', onError);
+			GIF_IMAGE_CLEANUP.delete(image);
+		}
+		function onError() {
+			releaseGifImage(image);
+		}
+		const timeout = setTimeout(onError, IMAGE_LOAD_TIMEOUT);
+		GIF_IMAGE_CLEANUP.set(image, cleanup);
+		image.addEventListener('load', cleanup);
+		image.addEventListener('error', onError);
+		image.src = source;
+	});
+}
+
+function releaseGifImage(image) {
+	GIF_IMAGE_CLEANUP.get(image)?.();
+	const fallback = image.parentElement?.querySelector('.text');
+	if (fallback) fallback.hidden = false;
+	image.removeAttribute('src');
+	image.remove();
+}
+
+function releaseMessageGifs(messageElement) {
+	messageElement?.querySelectorAll('.chat-gif').forEach(releaseGifImage);
+}
+
+function waitForMessageImage(image) {
+	// GIFs have a fixed bounded frame and load after insertion. Other images
+	// must settle on errors/timeouts as well as success so a message cannot hang.
+	if (image.complete || image.classList.contains('chat-gif')) {
+		return Promise.resolve();
+	}
+	return new Promise(resolve => {
+		function finish() {
+			clearTimeout(timeout);
+			image.removeEventListener('load', finish);
+			image.removeEventListener('error', finish);
+			resolve();
+		}
+		const timeout = setTimeout(finish, IMAGE_LOAD_TIMEOUT);
+		image.addEventListener('load', finish);
+		image.addEventListener('error', finish);
+	});
 }
 
 /**

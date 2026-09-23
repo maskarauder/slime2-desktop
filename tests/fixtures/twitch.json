@@ -172,6 +172,130 @@
 					"message_id": "fixture-message-1"
 				}
 			}
+		},
+		{
+			"metadata": {
+				"message_id": "fixture-twitch-gif-only",
+				"message_type": "notification",
+				"message_timestamp": "2026-01-01T00:00:00Z",
+				"subscription_type": "channel.chat.message",
+				"subscription_version": "1"
+			},
+			"payload": {
+				"subscription": {
+					"id": "fixture-subscription",
+					"type": "channel.chat.message",
+					"version": "1",
+					"status": "enabled"
+				},
+				"event": {
+					"broadcaster_user_id": "1000",
+					"broadcaster_user_login": "fixture_streamer",
+					"broadcaster_user_name": "Fixture Streamer",
+					"chatter_user_id": "1001",
+					"chatter_user_login": "fixture_viewer",
+					"chatter_user_name": "Fixture Viewer",
+					"message_id": "fixture-twitch-gif-only",
+					"message": {
+						"text": "[GIF]",
+						"fragments": [
+							{
+								"type": "gif",
+								"text": "[GIF]",
+								"gif": {
+									"id": "fixture-gif-1",
+									"url": "https://media.example.invalid/gifs/fixture.gif?provider=fixture%2Bonly&width=320&repeat=0"
+								}
+							}
+						]
+					},
+					"badges": [
+						{
+							"set_id": "moderator",
+							"id": "1",
+							"info": ""
+						}
+					],
+					"color": "#663399",
+					"message_type": "text",
+					"cheer": null,
+					"reply": null
+				}
+			}
+		},
+		{
+			"metadata": {
+				"message_id": "fixture-twitch-gif-mixed",
+				"message_type": "notification",
+				"message_timestamp": "2026-01-01T00:00:00Z",
+				"subscription_type": "channel.chat.message",
+				"subscription_version": "1"
+			},
+			"payload": {
+				"subscription": {
+					"id": "fixture-subscription",
+					"type": "channel.chat.message",
+					"version": "1",
+					"status": "enabled"
+				},
+				"event": {
+					"broadcaster_user_id": "1000",
+					"broadcaster_user_login": "fixture_streamer",
+					"broadcaster_user_name": "Fixture Streamer",
+					"chatter_user_id": "1001",
+					"chatter_user_login": "fixture_viewer",
+					"chatter_user_name": "Fixture Viewer",
+					"message_id": "fixture-twitch-gif-mixed",
+					"message": {
+						"text": "Hello Kappa [GIF]!",
+						"fragments": [
+							{
+								"type": "text",
+								"text": "Hello "
+							},
+							{
+								"type": "emote",
+								"text": "Kappa",
+								"emote": {
+									"id": "25",
+									"emote_set_id": "0",
+									"owner_id": "0",
+									"format": [
+										"static"
+									]
+								}
+							},
+							{
+								"type": "text",
+								"text": " "
+							},
+							{
+								"type": "gif",
+								"text": "[GIF]",
+								"gif": {
+									"id": "fixture-gif-1",
+									"url": "https://media.example.invalid/gifs/fixture.gif?provider=fixture%2Bonly&width=320&repeat=0"
+								}
+							},
+							{
+								"type": "text",
+								"text": "!"
+							}
+						]
+					},
+					"badges": [
+						{
+							"set_id": "moderator",
+							"id": "1",
+							"info": ""
+						}
+					],
+					"color": "#663399",
+					"message_type": "text",
+					"cheer": null,
+					"reply": null
+				}
+			}
 		}
 	]
 }

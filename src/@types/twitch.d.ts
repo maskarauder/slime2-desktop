@@ -882,6 +882,14 @@ namespace Twitch {
 				};
 		  }
 		| {
+				type: 'gif';
+				gif: {
+					id: string;
+					// Render the complete provider URL unchanged, including its query.
+					url: string;
+				};
+		  }
+		| {
 				type: 'mention';
 				mention: {
 					user_id: string;

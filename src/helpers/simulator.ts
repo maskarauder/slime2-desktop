@@ -9,11 +9,18 @@ export type SimulationPlatform = 'twitch' | 'youtube' | 'tiktok';
 export type SimulationKind =
 	| 'chat'
 	| 'emote'
+	| 'gif'
 	| 'superChat'
 	| 'superSticker'
 	| 'membership'
 	| 'membershipGift'
 	| 'gift';
+
+// Existing project sample, pinned to a commit; this is a synthetic GIF event,
+// not a Twitch asset lookup. Live GIF URLs must always be forwarded unchanged.
+const SAMPLE_GIF_URL =
+	'https://raw.githubusercontent.com/maskarauder/slime2-desktop/81c8ed9a4d75ef523aa365befada3181d4edc1f4/resources/widgets/test/assets/heavy_breathing.gif';
+
 export function makeSimulation(
 	platform: SimulationPlatform,
 	kind: SimulationKind,
@@ -28,6 +35,10 @@ export function makeSimulation(
 		e => e.name === ':face-red-droopy-eyes:',
 	)!;
 	if (platform === 'youtube') {
+		if (kind === 'gif')
+			throw new Error(
+				'GIF message simulation is only available for Twitch.',
+			);
 		const types = {
 			chat: 'textMessageEvent',
 			emote: 'textMessageEvent',
@@ -115,8 +126,19 @@ export function makeSimulation(
 			},
 		};
 	}
+	if (kind === 'gif' && platform !== 'twitch')
+		throw new Error('GIF message simulation is only available for Twitch.');
 	const fragments = [
-		{ type: 'text', text: content },
+		{ type: 'text', text: kind === 'gif' ? `${content} ` : content },
+		...(kind === 'gif'
+			? [
+					{
+						type: 'gif',
+						text: '[GIF]',
+						gif: { id: 'simulation-gif', url: SAMPLE_GIF_URL },
+					},
+				]
+			: []),
 		...(kind === 'emote'
 			? [
 					{
@@ -154,7 +176,12 @@ export function makeSimulation(
 			color: '#9146ff',
 			badges: [],
 			message: {
-				text: kind === 'gift' ? 'Sent 3 × Sample gift' : content,
+				text:
+					kind === 'gift'
+						? 'Sent 3 × Sample gift'
+						: kind === 'gif'
+							? `${content} [GIF]`
+							: content,
 				fragments:
 					kind === 'gift'
 						? [{ type: 'text', text: 'Sent 3 × Sample gift' }]

@@ -533,7 +533,7 @@
 						"label": "Static Emotes",
 						"halfSpan": true,
 						"defaultValue": false,
-						"description": "If enabled, emotes won't be animated."
+						"description": "If enabled, emotes won't be animated and Twitch GIF messages show their text descriptions."
 					},
 					"use-dynamic-emote-sizing": {
 						"type": "toggle-input",
