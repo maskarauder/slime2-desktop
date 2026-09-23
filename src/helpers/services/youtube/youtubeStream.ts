@@ -37,6 +37,7 @@ export async function* streamYouTubeChat(
 	liveChatId: string,
 	pageToken: string | undefined,
 	signal: AbortSignal,
+	onConnected?: () => void,
 ): AsyncGenerator<YouTubeLiveChatMessageListResponse> {
 	let rejectedToken: string | undefined;
 	let refreshedAfterRejection = false;
@@ -64,6 +65,7 @@ export async function* streamYouTubeChat(
 			});
 			if (signal.aborted) return;
 			console.info(`YouTube streamList connected for ${accountId}.`);
+			onConnected?.();
 			while (!signal.aborted) {
 				const batch =
 					await invoke<YouTubeLiveChatMessageListResponse | null>(

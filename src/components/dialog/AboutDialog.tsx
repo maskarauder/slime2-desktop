@@ -12,8 +12,16 @@ export default function AboutDialog() {
 		<DialogContent className='flex flex-col justify-between gap-4 p-4'>
 			<div className='flex gap-8 pl-4'>
 				<div className='flex flex-col items-center gap-2'>
-					<img alt='' src={slime2TvImage} className='h-50 smooth-image' />
-					<img alt='' src={slime2TextImage} className='h-20 smooth-image' />
+					<img
+						alt=''
+						src={slime2TvImage}
+						className='h-50 smooth-image'
+					/>
+					<img
+						alt=''
+						src={slime2TextImage}
+						className='h-20 smooth-image'
+					/>
 				</div>
 
 				<LinkifyText
@@ -37,7 +45,22 @@ export default function AboutDialog() {
 							{[
 								['Website', 'https://slime2.stream/'],
 								['Forums', 'https://slime2.forumotion.com/'],
-								['Source', 'https://github.com/zaytri/slime2-desktop'],
+								[
+									'Source',
+									'https://github.com/maskarauder/slime2-desktop',
+								],
+								[
+									'Releases',
+									'https://github.com/maskarauder/slime2-desktop/releases',
+								],
+								[
+									'Report an issue',
+									'https://github.com/maskarauder/slime2-desktop/issues',
+								],
+								[
+									'Upstream source',
+									'https://github.com/zaytri/slime2-desktop',
+								],
 							].map(([label, link]) => {
 								return (
 									<p key={label} className='text-3.5'>
@@ -49,15 +72,19 @@ export default function AboutDialog() {
 					</section>
 
 					<section className='flex flex-col gap-1 rounded-2 border border-zinc-300 bg-white px-3 py-1'>
-						<h2 className='text-4.5 font-bold text-zinc-800 uppercase'>Team</h2>
+						<h2 className='text-4.5 font-bold text-zinc-800 uppercase'>
+							Team
+						</h2>
 						<div className='flex flex-col'>
-							{[['Zaytri', 'https://zaytri.com/']].map(([label, link]) => {
-								return (
-									<p key={label} className='text-3.5'>
-										{label}: {link}
-									</p>
-								);
-							})}
+							{[['Zaytri', 'https://zaytri.com/']].map(
+								([label, link]) => {
+									return (
+										<p key={label} className='text-3.5'>
+											{label}: {link}
+										</p>
+									);
+								},
+							)}
 						</div>
 					</section>
 
@@ -67,8 +94,16 @@ export default function AboutDialog() {
 						</h2>
 						<div className='flex flex-col'>
 							{[
-								['Logo Designer', 'Bri', 'https://sidequestdesigns.com/'],
-								['Icon Artist', 'Anje', 'https://ko-fi.com/shenanjegans'],
+								[
+									'Logo Designer',
+									'Bri',
+									'https://sidequestdesigns.com/',
+								],
+								[
+									'Icon Artist',
+									'Anje',
+									'https://ko-fi.com/shenanjegans',
+								],
 							].map(([role, name, link]) => {
 								return (
 									<p key={name} className='text-3.5'>

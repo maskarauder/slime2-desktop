@@ -1,4 +1,5 @@
 import type { Account } from '../../json/accounts';
+import type { ConnectionUpdate } from '../../connectionStatus';
 import { safeLogText } from '../../safeLog';
 import twitchApi, { createEventSubParamsList } from './twitchApi';
 import twitchAuth, { TwitchReauthorizationError } from './twitchAuth';
@@ -22,6 +23,7 @@ export function startTwitchSession(
 			message: Twitch.WebsocketMessage.Notification,
 		) => Promise<void>;
 		onReauthorize: () => void;
+		onStatus?: (status: ConnectionUpdate) => void;
 	},
 	dependencies = {
 		open: (url: string) => new WebSocket(url),
@@ -77,6 +79,11 @@ export function startTwitchSession(
 		const wait =
 			Math.min(1000 * 2 ** Math.min(attempt++, 5), 30_000) +
 			Math.floor(Math.random() * 500);
+		options.onStatus?.({
+			state: 'reconnecting',
+			retryAt: Date.now() + wait,
+			transport: 'websocket',
+		});
 		retry = setTimeout(() => {
 			retry = undefined;
 			void open();
@@ -113,6 +120,7 @@ export function startTwitchSession(
 		if (stopped || (!url && (opening || active)) || (url && replacement))
 			return;
 		opening = true;
+		options.onStatus?.({ state: 'connecting', transport: 'websocket' });
 		try {
 			if (!url) await dependencies.validate(account.id);
 			if (stopped) return;
@@ -176,6 +184,11 @@ export function startTwitchSession(
 								}
 							}
 							attempt = 0;
+							if (stopped || !sockets.has(state)) return;
+							options.onStatus?.({
+								state: 'connected',
+								transport: 'websocket',
+							});
 							console.info(
 								'Twitch chat connected:',
 								account.displayName,

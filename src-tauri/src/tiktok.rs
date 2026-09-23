@@ -71,6 +71,7 @@ struct TikTokStatusPayload {
 	state: String,
 	code: Option<u16>,
 	message: Option<String>,
+	retry_after_ms: Option<u64>,
 }
 
 async fn consume_live_chat(
@@ -400,6 +401,11 @@ fn emit_status(
 			account_id: account_id.to_string(),
 			session_id: session_id.to_string(),
 			state: state.to_string(),
+			retry_after_ms: match state {
+				"offline" => Some(OFFLINE_RETRY_DELAY.as_millis() as u64),
+				"reconnecting" => Some(ERROR_RETRY_DELAY.as_millis() as u64),
+				_ => None,
+			},
 			code,
 			message,
 		},

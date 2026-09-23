@@ -11,6 +11,8 @@ import { startTwitchSession } from '@/helpers/services/twitch/twitchSession';
 import { sendTwitchEvent } from '@/helpers/widgetMessage';
 import { safeLogText } from '@/helpers/safeLog';
 import { useEffect, useRef } from 'react';
+import { beginConnection } from '@/helpers/connectionStatus';
+import { useReconnectRequest } from './useReconnectRequest';
 
 export default function useTwitchWebsocket() {
 	const accounts = useAccounts();
@@ -20,6 +22,12 @@ export default function useTwitchWebsocket() {
 	const latest = useRef({ accounts, widgetMetas, updateAccount, logEvent });
 	latest.current = { accounts, widgetMetas, updateAccount, logEvent };
 	const sessions = useRef(new Map<string, { stop: () => void }>());
+	const reconnectRevision = useReconnectRequest(id => {
+		if (latest.current.accounts[id]?.service !== 'twitch') return false;
+		sessions.current.get(id)?.stop();
+		sessions.current.delete(id);
+		return true;
+	});
 	function reauthorize(id: string) {
 		const account = latest.current.accounts[id];
 		if (account && !account.reauthorize)
@@ -176,17 +184,21 @@ export default function useTwitchWebsocket() {
 			}
 		for (const account of needed) {
 			if (sessions.current.has(account.id)) continue;
-			sessions.current.set(
-				account.id,
-				startTwitchSession({
-					account,
-					onNotification: message =>
-						notification(account.id, message),
-					onReauthorize: () => reauthorize(account.id),
-				}),
-			);
+			const status = beginConnection(account.id);
+			const session = startTwitchSession({
+				account,
+				onStatus: status.update,
+				onNotification: message => notification(account.id, message),
+				onReauthorize: () => reauthorize(account.id),
+			});
+			sessions.current.set(account.id, {
+				stop() {
+					session.stop();
+					status.dispose();
+				},
+			});
 		}
-	}, [accounts, widgetMetas]);
+	}, [accounts, widgetMetas, reconnectRevision]);
 	// Validate on startup and during quiet chats; failures are retried without deleting credentials.
 	useEffect(() => {
 		let disposed = false;

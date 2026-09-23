@@ -1,7 +1,9 @@
 // Tauri commands retain their frontend invoke names when moved to submodules.
 // Websocket commands found under server/websocket/ws_commands.rs
 
+pub mod backup;
 pub mod credentials;
+pub mod diagnostics;
 pub mod tiktok;
 pub mod youtube_oauth;
 

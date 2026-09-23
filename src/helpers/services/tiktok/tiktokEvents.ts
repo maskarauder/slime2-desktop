@@ -55,10 +55,40 @@ export function parseEulerStreamMessage(
 }
 
 export function normalizeChatEvent(envelope: TikTokEventEnvelope) {
-	if (envelope.type !== 'WebcastChatMessage') return null;
+	if (!['WebcastChatMessage', 'WebcastGiftMessage'].includes(envelope.type))
+		return null;
 
 	const { data } = envelope;
-	const comment = typeof data.comment === 'string' ? data.comment : '';
+	const giftDetails = isRecord(data.giftDetails) ? data.giftDetails : {};
+	const giftEvent = envelope.type === 'WebcastGiftMessage';
+	if (
+		giftEvent &&
+		Number(giftDetails.giftType) === 1 &&
+		Number(data.repeatEnd) !== 1
+	)
+		return null;
+	const rawCount = Number(data.repeatCount ?? 1);
+	const gift = giftEvent
+		? {
+				id:
+					firstString(giftDetails, ['id']) ??
+					firstString(data, ['giftId']) ??
+					'',
+				name: (firstString(giftDetails, ['name']) ?? 'gift').slice(
+					0,
+					100,
+				),
+				count: Number.isFinite(rawCount)
+					? Math.max(1, Math.min(1_000_000, Math.floor(rawCount)))
+					: 1,
+				complete: true,
+			}
+		: undefined;
+	const comment = gift
+		? `Sent ${gift.count} × ${gift.name}`
+		: typeof data.comment === 'string'
+			? data.comment
+			: '';
 	const user = isRecord(data.user) ? data.user : {};
 	const common = isRecord(data.common) ? data.common : {};
 	const username = firstString(user, ['uniqueId', 'displayId', 'nickname']);
@@ -84,6 +114,7 @@ export function normalizeChatEvent(envelope: TikTokEventEnvelope) {
 		type: envelope.type,
 		timestamp,
 		data: {
+			...(gift ? { gift } : {}),
 			message: {
 				text: comment,
 				fragments: buildTikTokFragments(comment, data.emotes),
@@ -94,7 +125,7 @@ export function normalizeChatEvent(envelope: TikTokEventEnvelope) {
 			message_id: messageId,
 			color: null,
 			badges: [],
-			message_type: 'chat',
+			message_type: gift ? 'gift' : 'chat',
 		},
 	};
 }
@@ -198,7 +229,8 @@ function firstString(
 	for (const key of keys) {
 		const value = record[key];
 		if (typeof value === 'string' && value) return value;
-		if (typeof value === 'number') return String(value);
+		if (typeof value === 'number' && Number.isSafeInteger(value))
+			return String(value);
 	}
 	return undefined;
 }

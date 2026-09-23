@@ -1,47 +1,45 @@
-import { saveJson } from '../commands';
-
-const queueSaves = new Map<string, VoidFunction>();
-const queueCooldowns = new Map<string, Date>();
-const COOLDOWN_AMOUNT = 3 * 1000; // 3 seconds
-
-// saves once every COOLDOWN_AMOUNT at most, queueing overridable saves
-export function queueSaveJson(jsonObject: unknown, filePath: string) {
-	const saveFunction = () => {
-		saveJson(jsonObject, filePath);
-	};
-
-	const cooldown = queueCooldowns.get(filePath);
-
-	// if within the cooldown, set the function to be queued,
-	// replacing any existing queued function
-	if (cooldown && cooldown.getTime() > Date.now()) {
-		queueSaves.set(filePath, saveFunction);
-	} else {
-		// set new cooldown of COOLDOWN_AMOUNT
-		queueCooldowns.set(filePath, new Date(Date.now() + COOLDOWN_AMOUNT));
-
-		if (runQueuedSave(filePath)) {
-			// queued function exists and was run, queue new function
-			queueSaves.set(filePath, saveFunction);
-		} else {
-			// nothing in queue, run the function
-			saveFunction();
-		}
-
-		// after COOLDOWN_AMOUNT passes, run the function in the queue if it exists
-		setTimeout(() => {
-			runQueuedSave(filePath);
-		}, COOLDOWN_AMOUNT);
+import { saveJsonAtomic } from '../commands';
+const pending = new Map<string, unknown>(),
+	running = new Map<string, Promise<void>>(),
+	timers = new Map<string, ReturnType<typeof setTimeout>>();
+export function queueSaveJson(value: unknown, path: string) {
+	pending.set(path, structuredClone(value));
+	if (!timers.has(path)) {
+		void drain(path).catch(error =>
+			console.error('Unable to save configuration:', error),
+		);
+		timers.set(
+			path,
+			setTimeout(() => {
+				timers.delete(path);
+				void drain(path).catch(error =>
+					console.error('Unable to save configuration:', error),
+				);
+			}, 3000),
+		);
 	}
 }
-
-// run function from queue if it exists, and clear the queue
-// returns true if there is a queued function
-function runQueuedSave(filePath: string) {
-	const queuedFunction = queueSaves.get(filePath);
-	if (queuedFunction) {
-		queuedFunction();
-		queueSaves.delete(filePath);
+async function drain(path: string): Promise<void> {
+	while (running.has(path)) await running.get(path)?.catch(() => {});
+	if (!pending.has(path)) return;
+	const value = pending.get(path);
+	pending.delete(path);
+	const task = saveJsonAtomic(value, path);
+	running.set(path, task);
+	try {
+		await task;
+	} catch (error) {
+		if (!pending.has(path)) pending.set(path, value);
+		throw error;
+	} finally {
+		if (running.get(path) === task) running.delete(path);
 	}
-	return !!queuedFunction;
+}
+export async function flushQueuedSaves() {
+	for (const timer of timers.values()) clearTimeout(timer);
+	timers.clear();
+	while (pending.size || running.size)
+		await Promise.all(
+			[...new Set([...pending.keys(), ...running.keys()])].map(drain),
+		);
 }

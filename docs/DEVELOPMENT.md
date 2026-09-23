@@ -3,6 +3,9 @@
 All commands below run from the repository root in PowerShell or a Unix shell.
 Paths are relative to the repository unless explicitly labeled as app data.
 
+See [DESKTOP-TOOLS.md](DESKTOP-TOOLS.md) for connection status, diagnostics,
+backup/restore, shared account editing, simulation and update checks.
+
 ## Setup and verification
 
 Use Node.js 22 (the CI version), npm and stable Rust. The native tests need a C/C++
@@ -107,8 +110,8 @@ reduces polling; it does not bypass the YouTube Data API's quotas.
 TikTok uses Euler Stream, not a public TikTok chat API. Native keepalive detects
 dead connections while allowing quiet chat. Offline and general reconnect delays
 are currently five minutes (`OFFLINE_RETRY_DELAY` and `ERROR_RETRY_DELAY` in
-`src-tauri/src/tiktok.rs`). TikTok normalization currently forwards chat/emotes;
-receiving an Euler gift event does not mean Desktop supports rendering that event.
+`src-tauri/src/tiktok.rs`). TikTok normalization forwards chat/emotes and final
+gift streaks. Widgets decide which normalized event types they render.
 
 ## Shared state, account linking and emotes
 

@@ -12,6 +12,7 @@ use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_log::{Target, TargetKind};
 use time::macros::format_description;
 
+mod backup;
 mod commands;
 mod file;
 mod secret;
@@ -176,7 +177,9 @@ async fn main() {
 		.manage(tiktok::TikTokConnections::default())
 		.manage(slime2_youtube_stream::YouTubeStreams::default())
 		.manage(AppState::default())
+		.manage(commands::backup::RestoreState::default())
 		.setup(|app: &mut tauri::App| {
+			backup::apply_pending(&commands::backup::paths(app.handle()).map_err(std::io::Error::other)?)?;
 			log::info!("Welcome to Slime2!");
 			log::info!(
 				"Build: version={} commit={} source={} target={} profile={}",
@@ -232,6 +235,11 @@ async fn main() {
 			Ok(())
 		})
 		.invoke_handler(tauri::generate_handler![
+			commands::diagnostics::read_recent_log,
+			commands::backup::export_app_backup,
+			commands::backup::preview_app_restore,
+			commands::backup::cancel_app_restore,
+			commands::backup::restore_app_backup,
 			youtube::open_youtube_chat_stream,
 			youtube::next_youtube_chat_batch,
 			youtube::close_youtube_chat_stream,

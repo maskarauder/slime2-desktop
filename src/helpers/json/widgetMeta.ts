@@ -65,6 +65,18 @@ export const WidgetMetaSchema = z.object({
 		[],
 	),
 	storageNamespace: z.catch(z.optional(z.string()), undefined),
+	accountLinkEditor: z.catch(
+		z.optional(
+			z.object({
+				key: z.string(),
+				idField: z.string(),
+				accountsField: z.string(),
+				platformField: z.string(),
+				accountField: z.string(),
+			}),
+		),
+		undefined,
+	),
 	channels: z.catch(z.optional(z.array(z.string())), undefined),
 });
 export type WidgetMeta = z.infer<typeof WidgetMetaSchema>;

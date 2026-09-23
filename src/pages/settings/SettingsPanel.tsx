@@ -8,6 +8,8 @@ import useAppVersionQuery from '@/hooks/useAppVersionQuery';
 import AboutDialog from '@@/dialog/AboutDialog';
 import BookSvg from '@@/svg/BookSvg';
 import EyeSvg from '@@/svg/EyeSvg';
+import UpdateSettings from './UpdateSettings';
+import DataTools from './DataTools';
 
 export default function SettingsPanel() {
 	const appVersionQuery = useAppVersionQuery();
@@ -20,11 +22,15 @@ export default function SettingsPanel() {
 				<div className='flex items-center gap-4 text-white text-shadow-[0_2px_black]'>
 					<h1 className='flex flex-1 items-center gap-4'>
 						<GearSvg className='-mb-0.5 size-6 drop-shadow-[0_2px_black]' />
-						<p className='flex-1 font-mochiy text-5'>App Settings</p>
+						<p className='flex-1 font-mochiy text-5'>
+							App Settings
+						</p>
 					</h1>
 
 					{appVersionQuery.data && (
-						<p className='self-end font-bold'>Slime2 v{appVersionQuery.data}</p>
+						<p className='self-end font-bold'>
+							Slime2 v{appVersionQuery.data}
+						</p>
 					)}
 
 					<HeaderButton
@@ -46,12 +52,17 @@ export default function SettingsPanel() {
 					/>
 				</div>
 
-				<div className='flex flex-1 flex-col gap-4 light-container p-4'>
+				<div className='flex flex-1 flex-col gap-4 overflow-y-auto light-container p-4'>
+					<UpdateSettings />
+					<DataTools />
 					<ToggleField
 						label='Disable UI Animations'
 						value={settings.disableAnimations}
 						onChange={value => {
-							setSettings({ ...settings, disableAnimations: value });
+							setSettings({
+								...settings,
+								disableAnimations: value,
+							});
 						}}
 						description='UI transitions will be instant rather than animated (does not affect overlay widget animations)'
 					/>
@@ -70,7 +81,10 @@ export default function SettingsPanel() {
 							label='Log All Widget Events'
 							value={settings.logWidgetEvents}
 							onChange={value => {
-								setSettings({ ...settings, logWidgetEvents: value });
+								setSettings({
+									...settings,
+									logWidgetEvents: value,
+								});
 							}}
 							description='Automatically logs every event sent to widgets. Sent to console for overlays, sent to bot logs for bots.'
 						/>

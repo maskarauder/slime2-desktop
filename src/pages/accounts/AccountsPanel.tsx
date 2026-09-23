@@ -6,6 +6,8 @@ import { useDialog } from '@/contexts/dialog/useDialog';
 import { groupAccounts } from '@/helpers/json/accounts';
 import AuthenticationDialog from '@@/dialog/AuthenticationDialog';
 import Accounts from './Accounts';
+import ConnectionDashboard from './ConnectionDashboard';
+import AccountLinks from './AccountLinks';
 
 export default function AccountsPanel() {
 	const accounts = useAccounts();
@@ -39,7 +41,10 @@ export default function AccountsPanel() {
 
 				<div className='flex flex-1 overflow-hidden light-container'>
 					<div className='flex flex-1 flex-col gap-4 overflow-y-auto p-4'>
-						{defaultAccounts.length === 0 && otherAccounts.length === 0 ? (
+						<ConnectionDashboard />
+						<AccountLinks />
+						{defaultAccounts.length === 0 &&
+						otherAccounts.length === 0 ? (
 							<p className='text-4.5'>
 								No accounts found.{' '}
 								<button

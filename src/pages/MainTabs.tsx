@@ -1,4 +1,5 @@
 import MoveModeBanner from '@/components/MoveModeBanner';
+import UpdateNotice from '@/components/UpdateNotice';
 import GearSvg from '@/components/svg/GearSvg';
 import GridSvg from '@/components/svg/GridSvg';
 import UserSvg from '@/components/svg/UserSvg';
@@ -70,6 +71,7 @@ function MainTabs() {
 					settings.disableAnimations && 'disable-animations',
 				)}
 			>
+				<UpdateNotice />
 				<div className='relative flex pt-6'>
 					<TabList
 						render={<nav />}

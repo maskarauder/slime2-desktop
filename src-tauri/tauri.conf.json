@@ -65,6 +65,7 @@
 					"http://ipc.localhost",
 					"https://id.twitch.tv",
 					"https://api.twitch.tv",
+					"https://api.github.com",
 					"wss://eventsub.wss.twitch.tv",
 					"https://www.googleapis.com",
 					"https://api.pronouns.alejo.io",

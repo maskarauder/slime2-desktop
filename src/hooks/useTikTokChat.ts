@@ -11,6 +11,8 @@ import { type Account } from '@/helpers/json/accounts';
 import { sendTikTokEvent } from '@/helpers/widgetMessage';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { useEffect, useRef, useState } from 'react';
+import { beginConnection } from '@/helpers/connectionStatus';
+import { useReconnectRequest } from './useReconnectRequest';
 
 type TikTokBackendMessage = {
 	accountId: string;
@@ -30,6 +32,7 @@ type TikTokBackendStatus = {
 		| 'error';
 	code?: number;
 	message?: string;
+	retryAfterMs?: number;
 };
 
 export default function useTikTokChat() {
@@ -40,12 +43,26 @@ export default function useTikTokChat() {
 	const widgetMetasRef = useRef(widgetMetas);
 	const updateAccountRef = useRef(updateAccount);
 	const sessions = useRef(new Map<string, string>());
+	const statuses = useRef(
+		new Map<string, ReturnType<typeof beginConnection>>(),
+	);
+	const nextRetryTick = useRef(Date.now() + 300_000);
 	const operations = useRef(new Map<string, Promise<void>>());
 	const [listenersReady, setListenersReady] = useState(false);
 	const [retryTick, setRetryTick] = useState(0);
 	accountsRef.current = accounts;
 	widgetMetasRef.current = widgetMetas;
 	updateAccountRef.current = updateAccount;
+	const reconnectRevision = useReconnectRequest(id => {
+		if (accountsRef.current[id]?.service !== 'tiktok') return false;
+		const session = sessions.current.get(id);
+		sessions.current.delete(id);
+		statuses.current.get(id)?.dispose();
+		statuses.current.delete(id);
+		if (session)
+			void enqueue(id, () => stopTikTokLive(id, session)).catch(() => {});
+		return true;
+	});
 
 	// Serialize native mutations; a delayed stop can never cancel a newer reader.
 	function enqueue(accountId: string, operation: () => Promise<void>) {
@@ -164,6 +181,9 @@ export default function useTikTokChat() {
 						return;
 					const account = accountsRef.current[accountId];
 					if (state === 'reauthorize') {
+						statuses.current
+							.get(accountId)
+							?.update({ state: 'reauthorize' });
 						stop(accountId, sessionId);
 						if (account && !account.reauthorize)
 							updateAccountRef.current({
@@ -176,24 +196,49 @@ export default function useTikTokChat() {
 							message,
 						);
 					} else if (state === 'error') {
+						statuses.current.get(accountId)?.update({
+							state: 'error',
+							retryAt: nextRetryTick.current,
+						});
 						stop(accountId, sessionId);
 						console.error(
 							`TikTok LIVE connection stopped${code ? ` (${code})` : ''}:`,
 							message,
 						);
 					} else if (state === 'connected') {
+						statuses.current
+							.get(accountId)
+							?.update({ state, transport: 'websocket' });
 						console.info(
 							`TikTok LIVE connected for ${account?.displayName ?? accountId}.`,
 						);
 					} else if (state === 'reconnecting') {
+						statuses.current.get(accountId)?.update({
+							state,
+							transport: 'websocket',
+							retryAt:
+								Date.now() +
+								(event.payload.retryAfterMs ?? 300_000),
+						});
 						console.warn(
 							`TikTok LIVE reconnecting${code ? ` (${code})` : ''}:`,
 							message,
 						);
 					} else if (state === 'offline') {
+						statuses.current.get(accountId)?.update({
+							state: 'waiting',
+							transport: 'websocket',
+							retryAt:
+								Date.now() +
+								(event.payload.retryAfterMs ?? 300_000),
+						});
 						console.info(
 							'TikTok broadcaster is offline; Slime2 will retry automatically.',
 						);
+					} else if (state === 'connecting') {
+						statuses.current
+							.get(accountId)
+							?.update({ state, transport: 'websocket' });
 					}
 				},
 			),
@@ -212,10 +257,11 @@ export default function useTikTokChat() {
 			unlisteners = ready;
 			setListenersReady(true);
 		});
-		const retry = setInterval(
-			() => setRetryTick(value => value + 1),
-			300_000,
-		);
+		nextRetryTick.current = Date.now() + 300_000;
+		const retry = setInterval(() => {
+			nextRetryTick.current = Date.now() + 300_000;
+			setRetryTick(value => value + 1);
+		}, 300_000);
 		return () => {
 			disposed = true;
 			clearInterval(retry);
@@ -246,6 +292,7 @@ export default function useTikTokChat() {
 		for (const [accountId, account] of needed) {
 			if (sessions.current.has(accountId)) continue;
 			const sessionId = crypto.randomUUID();
+			statuses.current.set(accountId, beginConnection(accountId));
 			sessions.current.set(accountId, sessionId);
 			void enqueue(accountId, async () => {
 				if (sessions.current.get(accountId) !== sessionId) return;
@@ -254,12 +301,21 @@ export default function useTikTokChat() {
 				if (sessions.current.get(accountId) !== sessionId) return;
 				sessions.current.delete(accountId);
 				console.error(
-					'Unable to start TikTok LIVE chat; retrying in 5 minutes:',
+					'Unable to start TikTok LIVE chat; retrying on the next scheduled attempt:',
 					error,
 				);
+				statuses.current.get(accountId)?.update({
+					state: 'error',
+					retryAt: nextRetryTick.current,
+				});
 			});
 		}
-	}, [accounts, listenersReady, widgetMetas, retryTick]);
+		for (const [id, status] of statuses.current)
+			if (!needed.has(id)) {
+				status.dispose();
+				statuses.current.delete(id);
+			}
+	}, [accounts, listenersReady, widgetMetas, retryTick, reconnectRevision]);
 
 	useEffect(
 		() => () => {
@@ -271,6 +327,8 @@ export default function useTikTokChat() {
 				);
 			}
 			sessions.current.clear();
+			statuses.current.forEach(status => status.dispose());
+			statuses.current.clear();
 		},
 		[],
 	);

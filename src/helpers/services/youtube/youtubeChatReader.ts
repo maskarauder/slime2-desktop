@@ -1,4 +1,5 @@
 import youtubeApi from './youtubeApi';
+import type { ConnectionUpdate } from '../../connectionStatus';
 import { YouTubeReauthorizationError } from './youtubeAuth';
 import { getYouTubeErrorDetails } from './youtubeError';
 import { streamYouTubeChat, YouTubeStreamError } from './youtubeStream';
@@ -45,6 +46,7 @@ export async function readYouTubeChat(
 		signal: AbortSignal;
 		accountName: () => string;
 		onMessage: (message: YouTubeLiveChatMessage) => Promise<void>;
+		onStatus?: (status: ConnectionUpdate) => void;
 	},
 	dependencies = defaultDependencies,
 ) {
@@ -61,6 +63,17 @@ export async function readYouTubeChat(
 	let waitingForBroadcast = false;
 	let lastHealthLog = now();
 	let receivedSinceHealthLog = 0;
+	const status = (value: ConnectionUpdate) => {
+		if (!signal.aborted) options.onStatus?.(value);
+	};
+	function wait(
+		milliseconds: number,
+		state: 'waiting' | 'reconnecting' | 'paused',
+		detail?: string,
+	) {
+		status({ state, retryAt: now() + milliseconds, detail });
+		return delay(milliseconds, signal);
+	}
 
 	function clearChat() {
 		liveChatId = undefined;
@@ -118,6 +131,10 @@ export async function readYouTubeChat(
 		let receivedStreamBatch = false;
 		try {
 			if (!liveChatId) {
+				status({
+					state: 'connecting',
+					detail: 'Checking for a live broadcast',
+				});
 				const response = await broadcast(accountId, signal);
 				if (signal.aborted) return;
 				const active = response.data.items?.find(
@@ -132,7 +149,7 @@ export async function readYouTubeChat(
 						);
 						waitingForBroadcast = true;
 					}
-					await delay(BROADCAST_RETRY_DELAY, signal);
+					await wait(BROADCAST_RETRY_DELAY, 'waiting');
 					continue;
 				}
 				liveChatId = active.snippet.liveChatId;
@@ -166,14 +183,25 @@ export async function readYouTubeChat(
 						: REST_POLL_INTERVAL,
 				);
 				nextPollAt = now() + pollingInterval;
+				status({
+					state: 'connected',
+					transport: 'rest',
+					retryAt: nextPollAt,
+					detail: 'REST fallback; next poll',
+				});
 				if (await processBatch(response.data)) {
 					clearChat();
-					await delay(BROADCAST_RETRY_DELAY, signal);
+					await wait(
+						BROADCAST_RETRY_DELAY,
+						'waiting',
+						'Live chat ended',
+					);
 				}
 				continue;
 			}
 
 			mode = 'stream';
+			status({ state: 'connecting', transport: 'grpc' });
 			streamStartedAt = now();
 			let ended = false;
 			for await (const batch of stream(
@@ -181,6 +209,7 @@ export async function readYouTubeChat(
 				liveChatId,
 				pageToken,
 				signal,
+				() => status({ state: 'connected', transport: 'grpc' }),
 			)) {
 				receivedStreamBatch = true;
 				if (signal.aborted) return;
@@ -195,7 +224,7 @@ export async function readYouTubeChat(
 					`YouTube live chat ended for ${accountName()}; checking for another broadcast in one minute.`,
 				);
 				clearChat();
-				await delay(BROADCAST_RETRY_DELAY, signal);
+				await wait(BROADCAST_RETRY_DELAY, 'waiting', 'Live chat ended');
 				continue;
 			}
 			throw new YouTubeStreamError(
@@ -226,7 +255,11 @@ export async function readYouTubeChat(
 					`YouTube chat paused for ${accountName()} for 15 minutes after a quota, rate limit, or permission error:`,
 					details,
 				);
-				await delay(LIMIT_RETRY_DELAY, signal);
+				await wait(
+					LIMIT_RETRY_DELAY,
+					'paused',
+					'Quota, rate limit, or permission error',
+				);
 				continue;
 			}
 			if (
@@ -242,7 +275,11 @@ export async function readYouTubeChat(
 				console.info(
 					`YouTube live chat is no longer available for ${accountName()}; checking again in one minute.`,
 				);
-				await delay(BROADCAST_RETRY_DELAY, signal);
+				await wait(
+					BROADCAST_RETRY_DELAY,
+					'waiting',
+					'Live chat unavailable',
+				);
 				continue;
 			}
 			if (
@@ -263,6 +300,12 @@ export async function readYouTubeChat(
 						nextPollAt,
 						now() + REST_POLL_INTERVAL,
 					);
+					status({
+						state: 'reconnecting',
+						transport: 'rest',
+						retryAt: nextPollAt,
+						detail: 'Switching to REST fallback',
+					});
 					streamFailures = 0;
 					console.warn(
 						`YouTube streamList unavailable for ${accountName()}; using REST fallback with at least 30s between polls and retrying streaming in 10 minutes:`,
@@ -274,7 +317,11 @@ export async function readYouTubeChat(
 						`YouTube streamList reconnect for ${accountName()} in ${retryDelay / 1000}s:`,
 						details,
 					);
-					await delay(retryDelay, signal);
+					await wait(
+						retryDelay,
+						'reconnecting',
+						'Resuming streamList',
+					);
 				}
 			} else {
 				const retryDelay =
@@ -286,7 +333,7 @@ export async function readYouTubeChat(
 					`YouTube ${mode} retry for ${accountName()} in ${retryDelay / 1000}s:`,
 					details,
 				);
-				await delay(retryDelay, signal);
+				await wait(retryDelay, 'reconnecting', `Retrying ${mode}`);
 			}
 		}
 	}

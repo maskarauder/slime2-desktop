@@ -26,6 +26,7 @@ export async function sendTwitchEvent(
 	eventTimestamp: string,
 	data: unknown,
 	mock: boolean = false,
+	dispatchToBot: boolean = true,
 ) {
 	return sendWidgetMessage(
 		widgetId,
@@ -39,7 +40,7 @@ export async function sendTwitchEvent(
 			mock,
 			data,
 		},
-		{ dispatchToBot: true },
+		{ dispatchToBot },
 	);
 }
 
@@ -50,6 +51,8 @@ export async function sendYouTubeEvent(
 	eventType: string,
 	eventTimestamp: string,
 	data: unknown,
+	mock: boolean = false,
+	dispatchToBot: boolean = true,
 ) {
 	return sendWidgetMessage(
 		widgetId,
@@ -60,9 +63,10 @@ export async function sendYouTubeEvent(
 			version: '1',
 			account_id: accountId,
 			timestamp: eventTimestamp,
+			mock,
 			data,
 		},
-		{ dispatchToBot: true },
+		{ dispatchToBot },
 	);
 }
 
@@ -73,6 +77,8 @@ export async function sendTikTokEvent(
 	eventType: string,
 	eventTimestamp: string,
 	data: unknown,
+	mock: boolean = false,
+	dispatchToBot: boolean = true,
 ) {
 	return sendWidgetMessage(
 		widgetId,
@@ -83,9 +89,10 @@ export async function sendTikTokEvent(
 			version: '1',
 			account_id: accountId,
 			timestamp: eventTimestamp,
+			mock,
 			data,
 		},
-		{ dispatchToBot: true },
+		{ dispatchToBot },
 	);
 }
 

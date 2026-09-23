@@ -1,5 +1,7 @@
 // Compile the actual transport code without requiring a desktop display/toolkit.
 #![allow(dead_code)]
+#[path = "../../src/backup.rs"]
+mod backup;
 #[path = "../../build_metadata.rs"]
 mod build_metadata;
 #[path = "../../src/server/websocket/connection.rs"]

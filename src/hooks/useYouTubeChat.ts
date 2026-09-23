@@ -9,9 +9,12 @@ import { getYouTubeErrorDetails } from '@/helpers/services/youtube/youtubeError'
 import type { YouTubeLiveChatMessage } from '@/helpers/services/youtube/youtubeTypes';
 import { sendYouTubeEvent } from '@/helpers/widgetMessage';
 import { useEffect, useRef } from 'react';
+import { beginConnection } from '@/helpers/connectionStatus';
+import { useReconnectRequest } from './useReconnectRequest';
 
 type YouTubeSession = {
 	abortController: AbortController;
+	status: ReturnType<typeof beginConnection>;
 };
 
 export default function useYouTubeChat() {
@@ -21,6 +24,14 @@ export default function useYouTubeChat() {
 	const accountsRef = useRef(accounts);
 	const widgetMetasRef = useRef(widgetMetas);
 	const sessions = useRef(new Map<string, YouTubeSession>());
+	const reconnectRevision = useReconnectRequest(id => {
+		if (accountsRef.current[id]?.service !== 'youtube') return false;
+		const session = sessions.current.get(id);
+		session?.abortController.abort();
+		session?.status.dispose();
+		sessions.current.delete(id);
+		return true;
+	});
 
 	async function dispatchMessage(
 		accountId: string,
@@ -71,10 +82,15 @@ export default function useYouTubeChat() {
 				accountName: () =>
 					accountsRef.current[accountId]?.displayName ?? accountId,
 				onMessage: message => dispatchMessage(accountId, message),
+				onStatus: session.status.update,
 			});
 		} catch (error) {
 			if (session.abortController.signal.aborted) return;
 			const details = getYouTubeErrorDetails(error);
+			session.status.update({
+				state: 'error',
+				detail: 'Reader stopped. Reconnect to retry.',
+			});
 			console.error(`YouTube chat stopped for ${accountId}:`, details);
 			if (
 				error instanceof YouTubeReauthorizationError ||
@@ -105,6 +121,7 @@ export default function useYouTubeChat() {
 		for (const [accountId, session] of sessions.current) {
 			if (!neededAccounts.has(accountId)) {
 				session.abortController.abort();
+				session.status.dispose();
 				sessions.current.delete(accountId);
 			}
 		}
@@ -114,31 +131,27 @@ export default function useYouTubeChat() {
 
 			const session: YouTubeSession = {
 				abortController: new AbortController(),
+				status: beginConnection(accountId),
 			};
 			sessions.current.set(accountId, session);
-			consumeYouTubeChat(accountId, session)
-				.finally(() => {
-					if (sessions.current.get(accountId) === session) {
-						sessions.current.delete(accountId);
-					}
-				})
-				.catch(error => {
-					console.error(
-						`YouTube chat session stopped unexpectedly for ${accountId}:`,
-						getYouTubeErrorDetails(error),
-					);
-				});
+			consumeYouTubeChat(accountId, session).catch(error => {
+				console.error(
+					`YouTube chat session stopped unexpectedly for ${accountId}:`,
+					getYouTubeErrorDetails(error),
+				);
+			});
 		}
 		// consumeYouTubeChat reads changing data through refs; restarting on its
 		// function identity would tear down every active polling session.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [accounts, widgetMetas]);
+	}, [accounts, widgetMetas, reconnectRevision]);
 
 	useEffect(() => {
 		const activeSessions = sessions.current;
 		return () => {
 			for (const session of activeSessions.values()) {
 				session.abortController.abort();
+				session.status.dispose();
 			}
 			activeSessions.clear();
 		};

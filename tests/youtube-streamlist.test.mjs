@@ -162,6 +162,11 @@ test('three transport failures switch to REST and honor the 30s floor and larger
 	const h = harness();
 	let streams = 0;
 	const times = [];
+	const transitions = [];
+	h.options.onStatus = status => {
+		if (status.detail === 'Switching to REST fallback')
+			transitions.push([h.dependencies.now(), status.retryAt]);
+	};
 	h.dependencies.stream = async function* () {
 		streams++;
 		throw new h.YouTubeStreamError(14, 'network');
@@ -179,6 +184,7 @@ test('three transport failures switch to REST and honor the 30s floor and larger
 	await h.run();
 	assert.equal(streams, 3);
 	assert.deepEqual(times, [45_000, 75_000, 120_000]);
+	assert.deepEqual(transitions, [[15_000, 45_000]]);
 	assert(h.logs.some(args => args[0].includes('REST fallback')));
 });
 

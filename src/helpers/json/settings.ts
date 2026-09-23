@@ -11,6 +11,8 @@ export const DEFAULT_SETTINGS: Settings = {
 	disableAnimations: false,
 	logWidgetEvents: false,
 	youtubeClientId: '',
+	updateChannel: 'stable',
+	checkUpdatesOnStart: false,
 };
 
 // functions
@@ -43,6 +45,8 @@ const OptionalSettings = z.partial(
 		disableAnimations: z.boolean(),
 		logWidgetEvents: z.boolean(),
 		youtubeClientId: z.string(),
+		updateChannel: z.enum(['stable', 'test']),
+		checkUpdatesOnStart: z.boolean(),
 	}),
 );
 
