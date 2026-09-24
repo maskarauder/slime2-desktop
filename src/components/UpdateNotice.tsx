@@ -1,31 +1,43 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useSettings } from '@/contexts/settings/useSettings';
 import useAppVersionQuery from '@/hooks/useAppVersionQuery';
+import { useSettingsQuery } from '@/hooks/useSettingsQuery';
+import { useUpdateSupport } from '@/hooks/useUpdateSupport';
+import { getAvailableUpdate, subscribeUpdates } from '@/helpers/updates';
 import {
-	checkForUpdate,
-	getAvailableUpdate,
-	subscribeUpdates,
-} from '@/helpers/updates';
+	getUpdateInstallation,
+	installationBusy,
+	installUpdate,
+	runStartupUpdate,
+	subscribeInstallation,
+} from '@/helpers/updateInstallation';
 import { openUrl } from '@/helpers/commands';
 import { safeLogText } from '@/helpers/safeLog';
 export default function UpdateNotice() {
 	const { settings } = useSettings(),
-		version = useAppVersionQuery().data;
+		{ data: savedSettings } = useSettingsQuery(),
+		version = useAppVersionQuery().data,
+		{ data: support } = useUpdateSupport();
 	const update = useSyncExternalStore(subscribeUpdates, getAvailableUpdate),
+		installation = useSyncExternalStore(
+			subscribeInstallation,
+			getUpdateInstallation,
+		),
 		[dismissed, setDismissed] = useState(''),
-		attempted = useRef('');
+		attempted = useRef(false);
+	const busy = installationBusy(installation);
 	useEffect(() => {
-		if (!version || !settings.checkUpdatesOnStart) return;
-		const key = `${version}:${settings.updateChannel}`;
-		if (attempted.current === key) return;
+		if (!version || !savedSettings || attempted.current) return;
 		const controller = new AbortController();
 		void Promise.resolve().then(async () => {
 			if (controller.signal.aborted) return;
-			attempted.current = key;
+			attempted.current = true;
 			try {
-				await checkForUpdate(
+				// Use settings loaded at launch. Changing the checkbox takes effect
+				// next launch, rather than interrupting an ongoing stream.
+				await runStartupUpdate(
 					version,
-					settings.updateChannel,
+					savedSettings,
 					controller.signal,
 				);
 			} catch (error) {
@@ -34,33 +46,61 @@ export default function UpdateNotice() {
 			}
 		});
 		return () => controller.abort();
-	}, [version, settings.updateChannel, settings.checkUpdatesOnStart]);
-	if (
-		!update ||
-		update.channel !== settings.updateChannel ||
-		dismissed === update.tag
-	)
+	}, [version, savedSettings]);
+	const visibleUpdate =
+		update?.channel === settings.updateChannel ? update : null;
+	if (!busy && (!visibleUpdate || dismissed === visibleUpdate.tag))
 		return null;
 	return (
 		<aside
-			aria-label='Update available'
+			aria-label='Slime2 updates'
 			className='flex items-center justify-between gap-3 bg-lime-100 px-5 py-2 text-zinc-900'
 		>
-			<p>Slime2 {update.tag} is available.</p>
-			<div className='flex gap-4'>
-				<button
-					className='font-bold underline'
-					onClick={() =>
-						void openUrl(update.url).catch(e =>
-							console.warn(safeLogText(e)),
-						)
-					}
-				>
-					View release
-				</button>
-				<button onClick={() => setDismissed(update.tag)}>
-					Dismiss
-				</button>
+			<div role='status'>
+				<p>
+					{busy ||
+					(installation.phase === 'error' &&
+						installation.tag === visibleUpdate?.tag)
+						? installation.message
+						: `Slime2 ${visibleUpdate?.tag} is available.`}
+				</p>
+				{!busy &&
+					visibleUpdate &&
+					(!visibleUpdate.hasManifest || !support?.supported) && (
+						<p className='text-3.5'>
+							{!visibleUpdate.hasManifest
+								? 'This release requires a manual download.'
+								: (support?.reason ??
+									'Checking automatic installation support…')}
+						</p>
+					)}
+			</div>
+			<div className='flex shrink-0 gap-4'>
+				{!busy && visibleUpdate?.hasManifest && support?.supported && (
+					<button
+						className='font-bold underline'
+						onClick={() => void installUpdate(visibleUpdate)}
+					>
+						Install and restart
+					</button>
+				)}
+				{visibleUpdate && (
+					<button
+						className='font-bold underline'
+						onClick={() =>
+							void openUrl(visibleUpdate.url).catch(e =>
+								console.warn(safeLogText(e)),
+							)
+						}
+					>
+						View release
+					</button>
+				)}
+				{!busy && visibleUpdate && (
+					<button onClick={() => setDismissed(visibleUpdate.tag)}>
+						Dismiss
+					</button>
+				)}
 			</div>
 		</aside>
 	);

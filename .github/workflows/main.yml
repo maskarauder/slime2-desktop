@@ -17,7 +17,85 @@ env:
   VERSION_SUFFIX: ${{ case(github.ref_name == 'release/live', '' ,github.ref_name == 'release/beta', '-beta', github.ref_name == 'release/debug', '-debug', '-test') }}
 
 jobs:
+  prepare-release:
+    permissions:
+      contents: write
+    runs-on: ubuntu-22.04
+    outputs:
+      app_version: ${{ steps.release.outputs.app_version }}
+      release_id: ${{ steps.release.outputs.release_id }}
+      tag: ${{ steps.release.outputs.tag }}
+      arch_linux_file_name: ${{ steps.release.outputs.arch_linux_file_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      - name: Check release version and public update key
+        run: |
+          npm run version:check
+          node scripts/updater-config.mjs --check
+
+      - name: Require private signing key
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo '::error::Set TAURI_SIGNING_PRIVATE_KEY before publishing. See docs/AUTOMATIC-UPDATES.md.'
+            exit 1
+          fi
+
+      - name: Prepare unpublished release
+        id: release
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('node:fs');
+            const version = JSON.parse(fs.readFileSync('package.json', 'utf8')).version;
+            const tag = `v${version}${process.env.VERSION_SUFFIX}`;
+            const { owner, repo } = context.repo;
+            let tagObject;
+            try {
+              const ref = await github.rest.git.getRef({ owner, repo, ref: `tags/${tag}` });
+              tagObject = ref.data.object;
+            } catch (error) {
+              if (error.status !== 404) throw error;
+            }
+            // An existing lightweight/annotated tag must identify this exact source.
+            for (let depth = 0; tagObject?.type === 'tag' && depth < 8; depth++) {
+              const annotated = await github.rest.git.getTag({ owner, repo, tag_sha: tagObject.sha });
+              tagObject = annotated.data.object;
+            }
+            if (tagObject && (tagObject.type !== 'commit' || tagObject.sha !== context.sha)) {
+              throw new Error(`${tag} already points at different source. Use a new version; do not move a published tag.`);
+            }
+            const releases = await github.paginate(github.rest.repos.listReleases, { owner, repo, per_page: 100 });
+            let release = releases.find(item => item.tag_name === tag);
+            if (release && !release.draft) {
+              throw new Error(`${tag} is already public. Increment the numeric app version instead of replacing installed update assets.`);
+            }
+            if (release && release.target_commitish !== context.sha) {
+              throw new Error(`${tag} is a draft from a different commit. Use a new version, or delete that unpublished draft and rerun every build.`);
+            }
+            if (!release) {
+              ({ data: release } = await github.rest.repos.createRelease({
+                owner, repo, tag_name: tag, target_commitish: context.sha,
+                name: `Slime2 ${tag}`, draft: true,
+                prerelease: process.env.VERSION_SUFFIX !== '',
+                body: 'See the assets to download this version and install. Automatic updates use the signed installers and latest.json.',
+              }));
+            }
+            core.setOutput('app_version', version);
+            core.setOutput('release_id', release.id);
+            core.setOutput('tag', tag);
+            core.setOutput('arch_linux_file_name', `Slime2-v${version}${process.env.VERSION_SUFFIX}_Arch-Linux.zip`);
+
   publish-tauri:
+    needs: prepare-release
     permissions:
       contents: write
 
@@ -87,31 +165,101 @@ jobs:
         id: tauri-build
         uses: tauri-apps/tauri-action@v1
         env:
-          # the action replaces \_\_VERSION\_\_ with the app version.
-          APP_VERSION_FULL: __VERSION__${{ env.VERSION_SUFFIX }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           FILE_SUFFIX: ${{ format('{0}-{1}', runner.os, matrix.output_arch || runner.arch) }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: 'v${{ env.APP_VERSION_FULL }}'
-          releaseName: 'Slime2 v${{ env.APP_VERSION_FULL }}'
+          releaseId: ${{ needs.prepare-release.outputs.release_id }}
+          tagName: ${{ needs.prepare-release.outputs.tag }}
+          releaseName: 'Slime2 ${{ needs.prepare-release.outputs.tag }}'
           releaseBody: 'See the assets to download this version and install.'
-          prerelease: true
-          args: ${{ format('{0}{1}', matrix.args, case(github.ref_name == 'release/debug', ' --debug', ''))}}
+          releaseDraft: true
+          prerelease: ${{ github.ref_name != 'release/live' }}
+          # Only release builds require signatures; ordinary local/PR builds do not.
+          args: >-
+            ${{ matrix.args }}
+            ${{ github.ref_name == 'release/debug' && '--debug' || '' }}
+            --config '{"bundle":{"createUpdaterArtifacts":true}}'
+          uploadUpdaterJson: true
+          uploadUpdaterSignatures: true
+          updaterJsonPreferNsis: false
+          retryAttempts: 3
           releaseAssetNamePattern: 'Slime2-v[version]${{ env.VERSION_SUFFIX }}_${{ env.FILE_SUFFIX }}[ext]'
 
-    outputs:
-      app_version: ${{ steps.tauri-build.outputs.appVersion }}
-      release_id: ${{ steps.tauri-build.outputs.releaseId }}
-      arch_linux_file_name: 'Slime2-v${{ steps.tauri-build.outputs.appVersion }}${{ env.VERSION_SUFFIX }}_Arch-Linux.zip'
+  publish-release:
+    permissions:
+      contents: write
+    needs: [prepare-release, publish-tauri]
+    runs-on: ubuntu-22.04
+    env:
+      APP_VERSION: ${{ needs.prepare-release.outputs.app_version }}
+      RELEASE_ID: ${{ needs.prepare-release.outputs.release_id }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Verify complete signed update manifest and publish
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('node:fs');
+            const config = JSON.parse(fs.readFileSync('src-tauri/tauri.conf.json', 'utf8'));
+            const publicDocument = Buffer.from(config.plugins.updater.pubkey, 'base64').toString('utf8').trim().split(/\r?\n/);
+            const publicBytes = Buffer.from(publicDocument[1] || '', 'base64');
+            if (publicBytes.length !== 42) throw new Error('Invalid configured updater public key.');
+            const publicKeyId = publicBytes.subarray(2, 10).toString('hex');
+            const { owner, repo } = context.repo;
+            const release_id = Number(process.env.RELEASE_ID);
+            const assets = await github.paginate(github.rest.repos.listReleaseAssets, { owner, repo, release_id, per_page: 100 });
+            const downloadText = async asset => {
+              if (!asset || asset.size > 1024 * 1024) throw new Error('Missing or unexpectedly large updater metadata asset.');
+              const response = await github.request('GET /repos/{owner}/{repo}/releases/assets/{asset_id}', {
+                owner, repo, asset_id: asset.id, headers: { accept: 'application/octet-stream' },
+              });
+              return Buffer.from(response.data).toString('utf8');
+            };
+            const manifest = JSON.parse(await downloadText(assets.find(asset => asset.name === 'latest.json')));
+            if (manifest.version !== process.env.APP_VERSION) throw new Error('Updater manifest version does not match this build.');
+            const targets = [
+              ['windows-x86_64-msi', 'Windows-X64.msi'],
+              ['windows-aarch64-msi', 'Windows-ARM64.msi'],
+              ['darwin-x86_64-app', 'macOS-X64.app.tar.gz'],
+              ['darwin-aarch64-app', 'macOS-ARM64.app.tar.gz'],
+              ['linux-x86_64-appimage', 'Linux-X64.AppImage'],
+              ['linux-aarch64-appimage', 'Linux-ARM64.AppImage'],
+            ];
+            for (const [target, suffix] of targets) {
+              const name = `Slime2-v${process.env.APP_VERSION}${process.env.VERSION_SUFFIX}_${suffix}`;
+              const installer = assets.find(asset => asset.name === name && asset.size > 0);
+              const entry = manifest.platforms?.[target];
+              if (!installer || !entry || !entry.signature || ![installer.url, installer.browser_download_url].includes(entry.url)) {
+                throw new Error(`Missing or mismatched signed installer for ${target}; release remains a draft. Rerun all build jobs for this commit.`);
+              }
+              const signature = await downloadText(assets.find(asset => asset.name === `${name}.sig`));
+              if (entry.signature.trim() !== signature.trim()) throw new Error(`Mismatched signature for ${target}.`);
+              const signatureDocument = Buffer.from(signature.trim(), 'base64').toString('utf8').trim().split(/\r?\n/);
+              const signatureBytes = Buffer.from(signatureDocument[1] || '', 'base64');
+              // The CLI only warns about a wrong private key; block that release.
+              if (signatureBytes.length !== 74 || signatureBytes.subarray(2, 10).toString('hex') !== publicKeyId) {
+                throw new Error(`Installer for ${target} was signed with a different updater key.`);
+              }
+            }
+            await github.rest.repos.updateRelease({
+              owner, repo, release_id, draft: false,
+              prerelease: process.env.VERSION_SUFFIX !== '',
+              make_latest: process.env.VERSION_SUFFIX === '' ? 'true' : 'false',
+            });
 
   publish-pkgbuild:
     permissions:
       contents: write
-    needs: publish-tauri
+    # updpkgsums downloads .deb assets by public URL, so this follows publication.
+    needs: [prepare-release, publish-release]
     env:
-      APP_VERSION: ${{ needs.publish-tauri.outputs.app_version }}
-      RELEASE_ID: ${{ needs.publish-tauri.outputs.release_id }}
-      FILE_NAME: ${{ needs.publish-tauri.outputs.arch_linux_file_name }}
+      APP_VERSION: ${{ needs.prepare-release.outputs.app_version }}
+      RELEASE_ID: ${{ needs.prepare-release.outputs.release_id }}
+      FILE_NAME: ${{ needs.prepare-release.outputs.arch_linux_file_name }}
 
     runs-on: ubuntu-22.04
     steps:

@@ -5,10 +5,16 @@ type Release = {
 	html_url: string;
 	draft: boolean;
 	prerelease: boolean;
-	assets: { state: string; size: number }[];
+	assets: { state: string; size: number; name?: string }[];
 };
-let available: { tag: string; url: string; channel: UpdateChannel } | null =
-	null;
+export type AvailableUpdate = {
+	tag: string;
+	url: string;
+	channel: UpdateChannel;
+	hasManifest: boolean;
+};
+let available: AvailableUpdate | null = null;
+let checkGeneration = 0;
 const listeners = new Set<() => void>();
 export const getAvailableUpdate = () => available;
 export function subscribeUpdates(callback: () => void) {
@@ -81,6 +87,7 @@ export async function checkForUpdate(
 	channel: UpdateChannel,
 	signal?: AbortSignal,
 ) {
+	const generation = ++checkGeneration;
 	const response = await fetch(
 		'https://api.github.com/repos/maskarauder/slime2-desktop/releases?per_page=100',
 		{
@@ -105,10 +112,20 @@ export async function checkForUpdate(
 		newer = release
 			? compareVersions(release.tag_name, current) > 0
 			: false;
-	if (!signal?.aborted) {
+	if (!signal?.aborted && generation === checkGeneration) {
 		available =
 			release && newer
-				? { tag: release.tag_name, url: release.html_url, channel }
+				? {
+						tag: release.tag_name,
+						url: release.html_url,
+						channel,
+						hasManifest: release.assets.some(
+							a =>
+								a?.name === 'latest.json' &&
+								a.state === 'uploaded' &&
+								a.size > 0,
+						),
+					}
 				: null;
 		listeners.forEach(fn => fn());
 	}

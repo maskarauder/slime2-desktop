@@ -121,8 +121,15 @@ updating existing widget copies.
 Settings checks the fork's public GitHub releases. Stable excludes prereleases;
 Test includes them. Drafts, debug tags and releases without uploaded downloads
 are excluded. Checks time out after 15 seconds and report API rate limits.
-Optional startup checks are off by default and run once per app version/channel.
-New releases appear in a dismissible banner. Downloads/installations are manual.
+Optional startup checks are off by default and run once per launch using the
+saved release channel.
+New releases appear in a dismissible banner. **Install and restart** downloads
+and verifies the matching signed installer, saves pending settings and relaunches
+Slime2. The optional **Automatically install the latest update at startup**
+checkbox is off by default and takes effect on the next launch. Manual update
+checks do not automatically install. Releases without updater metadata and
+unsupported installation formats still link to the manual downloads. See
+[AUTOMATIC-UPDATES.md](AUTOMATIC-UPDATES.md) for release signing setup and details.
 About links to the fork's source, releases and issues and retains upstream credits.
 
 Implementation: `src/helpers/updates.ts`, `src/components/UpdateNotice.tsx`,

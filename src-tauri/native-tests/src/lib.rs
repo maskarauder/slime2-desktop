@@ -14,3 +14,5 @@ mod session_tasks;
 mod tiktok_lookup;
 #[path = "../../src/tls.rs"]
 mod tls;
+#[path = "../../src/updater_policy.rs"]
+mod updater_policy;

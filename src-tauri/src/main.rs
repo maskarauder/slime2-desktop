@@ -21,6 +21,8 @@ mod session_tasks;
 mod tiktok;
 mod tiktok_lookup;
 mod tls;
+mod updater;
+mod updater_policy;
 mod watcher;
 mod youtube;
 
@@ -175,6 +177,8 @@ async fn main() {
 		.plugin(tauri_plugin_dialog::init())
 		.plugin(tauri_plugin_clipboard_manager::init())
 		.plugin(tauri_plugin_opener::init())
+		.plugin(tauri_plugin_updater::Builder::new().build())
+		.manage(updater::UpdateState::default())
 		.manage(connections.clone())
 		.manage(server::access::WidgetAccess::default())
 		.manage(tiktok::TikTokConnections::default())
@@ -238,6 +242,10 @@ async fn main() {
 			Ok(())
 		})
 		.invoke_handler(tauri::generate_handler![
+			updater::get_update_support,
+			updater::prepare_release_update,
+			updater::install_prepared_update,
+			updater::discard_prepared_update,
 			commands::diagnostics::read_recent_log,
 			commands::backup::export_app_backup,
 			commands::backup::preview_app_restore,

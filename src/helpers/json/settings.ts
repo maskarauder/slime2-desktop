@@ -13,6 +13,7 @@ export const DEFAULT_SETTINGS: Settings = {
 	youtubeClientId: '',
 	updateChannel: 'stable',
 	checkUpdatesOnStart: false,
+	autoInstallUpdates: false,
 };
 
 // functions
@@ -47,6 +48,7 @@ const OptionalSettings = z.partial(
 		youtubeClientId: z.string(),
 		updateChannel: z.enum(['stable', 'test']),
 		checkUpdatesOnStart: z.boolean(),
+		autoInstallUpdates: z.boolean(),
 	}),
 );
 

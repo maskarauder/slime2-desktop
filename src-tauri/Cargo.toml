@@ -2,7 +2,7 @@
 
 [package]
 name = "slime2"
-version = "1.5.2"
+version = "1.5.3"
 description = "Local Stream Widget Manager"
 edition = "2024"
 publish = false
@@ -14,6 +14,7 @@ tauri-build = { version = "2.6.3", features = [] }
 # necessary for tauri
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
+semver = "1.0.28"
 tauri = { version = "2.11.5", features = [] }
 
 # added for slime2
@@ -35,6 +36,7 @@ tauri-plugin-dialog = "2.7.2"
 tauri-plugin-log = "2.9.0"
 tauri-plugin-opener = "2.5.4"
 tauri-plugin-single-instance = "2.4.3"
+tauri-plugin-updater = "2.12.0"
 tauri-plugin-window-state = "2.4.1"
 time = { version = "0.3.55", features = ["formatting", "local-offset"] }
 tokio = { version = "1.53.1", features = ["full"] }

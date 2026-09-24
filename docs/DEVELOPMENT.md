@@ -5,6 +5,8 @@ Paths are relative to the repository unless explicitly labeled as app data.
 
 See [DESKTOP-TOOLS.md](DESKTOP-TOOLS.md) for connection status, diagnostics,
 backup/restore, shared account editing, simulation and update checks.
+See [AUTOMATIC-UPDATES.md](AUTOMATIC-UPDATES.md) for optional signed installation,
+the one-time release signing setup and installer/relaunch validation.
 
 ## Setup and verification
 

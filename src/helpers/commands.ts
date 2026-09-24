@@ -1,6 +1,30 @@
 //? Tauri Command Guide: https://tauri.app/v1/guides/features/command
-import { invoke } from '@tauri-apps/api/core';
+import { Channel, invoke } from '@tauri-apps/api/core';
 import type { DefaultWidgetId } from './defaultWidgets';
+
+export type UpdateSupport = { supported: boolean; reason: string | null };
+export type UpdateProgress = {
+	stage: 'checking' | 'downloading' | 'ready' | 'installing';
+	downloaded: number;
+	total: number | null;
+};
+export function getUpdateSupport(): Promise<UpdateSupport> {
+	return invoke('get_update_support');
+}
+export function prepareReleaseUpdate(
+	tag: string,
+	onProgress: (progress: UpdateProgress) => void,
+): Promise<{ token: string; version: string }> {
+	const channel = new Channel<UpdateProgress>();
+	channel.onmessage = onProgress;
+	return invoke('prepare_release_update', { tag, onProgress: channel });
+}
+export function installPreparedUpdate(token: string): Promise<void> {
+	return invoke('install_prepared_update', { token });
+}
+export function discardPreparedUpdate(token: string): Promise<void> {
+	return invoke('discard_prepared_update', { token });
+}
 
 export async function sendWebsocketMessage(
 	message: string,
