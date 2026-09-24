@@ -67,9 +67,9 @@ are separate from Windows/macOS operating-system code-signing certificates.
    branch. Dispatching on another branch uses the existing test-channel suffix.
 
 3. Wait for `.github/workflows/main.yml` to finish. It creates a draft first,
-   verifies/builds all six OS/architecture targets, signs the updater artifacts and
-   uploads `latest.json`. A final job checks that the manifest contains all six
-   expected installers and matching signature assets/key IDs before publishing. Stable
+   verifies/builds all six OS/architecture targets and uploads signed updater
+   artifacts. The final job validates all six installers and matching signature
+   assets/key IDs, creates and uploads `latest.json` once, then publishes. Stable
    releases are marked as non-prerelease and latest; test/beta/debug releases stay
    prereleases. The Arch recipe ZIP is added afterward because its checksum step
    needs the published `.deb` download URLs.
@@ -88,7 +88,8 @@ An interrupted matrix build leaves an unpublished draft. Rerun failed jobs for t
 same commit. If you change the source, use a new version or delete the unpublished
 draft and rerun **all** build jobs so one release cannot mix different commits.
 An existing release tag must also point at the exact commit being built. If the
-final manifest check reports missing targets, rerun all build jobs for that commit.
+final check identifies a missing asset, rerun its platform build for that commit,
+then rerun the final publication job.
 If only the Arch recipe job fails, the signed installers are already published;
 rerun that job, not the complete release workflow.
 
@@ -121,3 +122,20 @@ platform smoke tests before relying on unattended updates during a stream.
 Implementation references:
 [Tauri updater](https://v2.tauri.app/plugin/updater/) and
 [Tauri GitHub action](https://github.com/tauri-apps/tauri-action).
+
+## Incomplete updater manifests from earlier workflows
+
+An earlier workflow let every platform build read and rewrite the same
+`latest.json`. Those parallel writes could lose platform entries even when all
+installer builds succeeded. The final publisher now derives the complete manifest
+from the uploaded installers and signatures rather than trusting a partial
+manifest. It preserves exact architecture and installer-family matching.
+
+If an installer or signature really is missing, the error identifies the required
+asset and platform. Publication stops before replacing the manifest. If all assets
+are valid, an incomplete old manifest is replaced with the complete one.
+
+After applying this workflow fix, commit/push it and start a new **Run workflow**
+from the updated branch. Use a new application version, or delete the unpublished
+draft for the previous commit and rebuild all targets. Rerunning an older workflow
+uses that run's original source and cannot pick up this fix.

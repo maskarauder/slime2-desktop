@@ -108,6 +108,7 @@ jobs:
             output_arch: 'X64'
           - platform: 'macos-latest' # Arm based Mac (M1 and above)
             args: '--target aarch64-apple-darwin'
+            output_arch: 'ARM64'
           - platform: 'ubuntu-22.04' # Linux
             args: ''
           - platform: 'ubuntu-22.04-arm' # Arm based Linux
@@ -181,7 +182,8 @@ jobs:
             ${{ matrix.args }}
             ${{ github.ref_name == 'release/debug' && '--debug' || '' }}
             --config '{"bundle":{"createUpdaterArtifacts":true}}'
-          uploadUpdaterJson: true
+          # Build the complete manifest once, after all matrix jobs finish.
+          uploadUpdaterJson: false
           uploadUpdaterSignatures: true
           updaterJsonPreferNsis: false
           retryAttempts: 3
@@ -204,51 +206,17 @@ jobs:
         with:
           script: |
             const fs = require('node:fs');
+            const { pathToFileURL } = require('node:url');
+            const { resolve } = require('node:path');
+            const { publishSignedRelease } = await import(pathToFileURL(resolve('scripts/publish-release.mjs')).href);
             const config = JSON.parse(fs.readFileSync('src-tauri/tauri.conf.json', 'utf8'));
-            const publicDocument = Buffer.from(config.plugins.updater.pubkey, 'base64').toString('utf8').trim().split(/\r?\n/);
-            const publicBytes = Buffer.from(publicDocument[1] || '', 'base64');
-            if (publicBytes.length !== 42) throw new Error('Invalid configured updater public key.');
-            const publicKeyId = publicBytes.subarray(2, 10).toString('hex');
-            const { owner, repo } = context.repo;
-            const release_id = Number(process.env.RELEASE_ID);
-            const assets = await github.paginate(github.rest.repos.listReleaseAssets, { owner, repo, release_id, per_page: 100 });
-            const downloadText = async asset => {
-              if (!asset || asset.size > 1024 * 1024) throw new Error('Missing or unexpectedly large updater metadata asset.');
-              const response = await github.request('GET /repos/{owner}/{repo}/releases/assets/{asset_id}', {
-                owner, repo, asset_id: asset.id, headers: { accept: 'application/octet-stream' },
-              });
-              return Buffer.from(response.data).toString('utf8');
-            };
-            const manifest = JSON.parse(await downloadText(assets.find(asset => asset.name === 'latest.json')));
-            if (manifest.version !== process.env.APP_VERSION) throw new Error('Updater manifest version does not match this build.');
-            const targets = [
-              ['windows-x86_64-msi', 'Windows-X64.msi'],
-              ['windows-aarch64-msi', 'Windows-ARM64.msi'],
-              ['darwin-x86_64-app', 'macOS-X64.app.tar.gz'],
-              ['darwin-aarch64-app', 'macOS-ARM64.app.tar.gz'],
-              ['linux-x86_64-appimage', 'Linux-X64.AppImage'],
-              ['linux-aarch64-appimage', 'Linux-ARM64.AppImage'],
-            ];
-            for (const [target, suffix] of targets) {
-              const name = `Slime2-v${process.env.APP_VERSION}${process.env.VERSION_SUFFIX}_${suffix}`;
-              const installer = assets.find(asset => asset.name === name && asset.size > 0);
-              const entry = manifest.platforms?.[target];
-              if (!installer || !entry || !entry.signature || ![installer.url, installer.browser_download_url].includes(entry.url)) {
-                throw new Error(`Missing or mismatched signed installer for ${target}; release remains a draft. Rerun all build jobs for this commit.`);
-              }
-              const signature = await downloadText(assets.find(asset => asset.name === `${name}.sig`));
-              if (entry.signature.trim() !== signature.trim()) throw new Error(`Mismatched signature for ${target}.`);
-              const signatureDocument = Buffer.from(signature.trim(), 'base64').toString('utf8').trim().split(/\r?\n/);
-              const signatureBytes = Buffer.from(signatureDocument[1] || '', 'base64');
-              // The CLI only warns about a wrong private key; block that release.
-              if (signatureBytes.length !== 74 || signatureBytes.subarray(2, 10).toString('hex') !== publicKeyId) {
-                throw new Error(`Installer for ${target} was signed with a different updater key.`);
-              }
-            }
-            await github.rest.repos.updateRelease({
-              owner, repo, release_id, draft: false,
-              prerelease: process.env.VERSION_SUFFIX !== '',
-              make_latest: process.env.VERSION_SUFFIX === '' ? 'true' : 'false',
+            await publishSignedRelease({
+              github, context,
+              version: process.env.APP_VERSION,
+              versionSuffix: process.env.VERSION_SUFFIX,
+              releaseId: Number(process.env.RELEASE_ID),
+              publicKey: config.plugins.updater.pubkey,
+              log: message => core.info(message),
             });
 
   publish-pkgbuild:
