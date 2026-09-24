@@ -4,6 +4,7 @@ import {
 	renameSync,
 	unlinkSync,
 	statSync,
+	realpathSync,
 } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -200,10 +201,18 @@ function main(args) {
 	for (const change of changes) console.log(`  ${change.file}`);
 }
 
-if (
-	process.argv[1] &&
-	path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
-) {
+// Node resolves ESM paths through symlinks, including macOS /var -> /private/var.
+let isMain = false;
+try {
+	isMain =
+		Boolean(process.argv[1]) &&
+		realpathSync(process.argv[1]) ===
+			realpathSync(fileURLToPath(import.meta.url));
+} catch {
+	// Imports from stdin/eval can have no filesystem entry point.
+}
+
+if (isMain) {
 	try {
 		main(process.argv.slice(2));
 	} catch (error) {

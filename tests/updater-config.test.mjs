@@ -6,10 +6,13 @@ import {
 	writeFileSync,
 	rmSync,
 	cpSync,
+	realpathSync,
+	symlinkSync,
 } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import {
 	configureUpdater,
@@ -56,37 +59,80 @@ test('release configuration rejects missing updater targets and disabled bundlin
 		);
 });
 
-test('release preparation fails for the old DMG-only macOS configuration and passes with app added', t => {
-	const root = mkdtempSync(path.join(os.tmpdir(), 'slime2-release-bundles-'));
-	t.after(() => rmSync(root, { recursive: true, force: true }));
-	mkdirSync(path.join(root, 'scripts'));
-	mkdirSync(path.join(root, 'src-tauri'));
-	const script = path.join(root, 'scripts/updater-config.mjs');
-	cpSync(new URL('../scripts/updater-config.mjs', import.meta.url), script);
-	const config = {
-		bundle: {
-			active: true,
-			targets: ['appimage', 'deb', 'rpm', 'msi', 'dmg'],
-		},
-		plugins: { updater: { pubkey: publicKey() } },
-	};
-	const file = path.join(root, 'src-tauri/tauri.conf.json');
-	writeFileSync(file, JSON.stringify(config));
-	const before = readFileSync(file, 'utf8');
-	const failed = spawnSync(process.execPath, [script, '--check'], {
-		encoding: 'utf8',
+for (const linked of [false, true])
+	test(`release preparation rejects DMG-only and accepts app through a ${linked ? 'symlinked' : 'direct'} path`, t => {
+		const temporary = mkdtempSync(
+			path.join(os.tmpdir(), 'slime2-release-bundles-'),
+		);
+		t.after(() => rmSync(temporary, { recursive: true, force: true }));
+		let root = path.join(temporary, 'project');
+		mkdirSync(root);
+		if (linked) {
+			const alias = path.join(temporary, 'linked project');
+			symlinkSync(
+				realpathSync(root),
+				alias,
+				process.platform === 'win32' ? 'junction' : 'dir',
+			);
+			root = alias;
+		}
+		mkdirSync(path.join(root, 'scripts'));
+		mkdirSync(path.join(root, 'src-tauri'));
+		const script = path.join(root, 'scripts/updater-config.mjs');
+		cpSync(
+			new URL('../scripts/updater-config.mjs', import.meta.url),
+			script,
+		);
+		const config = {
+			bundle: {
+				active: true,
+				targets: ['appimage', 'deb', 'rpm', 'msi', 'dmg'],
+			},
+			plugins: { updater: { pubkey: publicKey() } },
+		};
+		const file = path.join(root, 'src-tauri/tauri.conf.json');
+		writeFileSync(file, JSON.stringify(config));
+		const before = readFileSync(file, 'utf8');
+		const failed = spawnSync(process.execPath, [script, '--check'], {
+			encoding: 'utf8',
+		});
+		assert.equal(failed.status, 1);
+		assert.match(
+			failed.stderr,
+			/Missing macOS updater bundle target "app"/,
+		);
+		assert.equal(readFileSync(file, 'utf8'), before);
+		config.bundle.targets.push('app');
+		writeFileSync(file, JSON.stringify(config));
+		const passed = spawnSync(process.execPath, [script, '--check'], {
+			encoding: 'utf8',
+		});
+		assert.equal(passed.status, 0, passed.stderr);
+		assert.match(passed.stdout, /release bundle targets are configured/);
 	});
-	assert.equal(failed.status, 1);
-	assert.match(failed.stderr, /Missing macOS updater bundle target "app"/);
-	assert.equal(readFileSync(file, 'utf8'), before);
-	config.bundle.targets.push('app');
-	writeFileSync(file, JSON.stringify(config));
-	const passed = spawnSync(process.execPath, [script, '--check'], {
-		encoding: 'utf8',
+
+for (const helper of ['updater-config', 'version'])
+	test(`${helper} imports do not execute the CLI, including stdin entry points`, () => {
+		const url = new URL(`../scripts/${helper}.mjs`, import.meta.url).href;
+		for (const entry of [
+			undefined,
+			'-',
+			'./missing-entry-file.mjs',
+			fileURLToPath(import.meta.url),
+		]) {
+			const source = `process.argv[1] = ${JSON.stringify(entry) ?? 'undefined'}; await import(${JSON.stringify(url)}); console.log('Imported without running CLI.');`;
+			const result = spawnSync(
+				process.execPath,
+				['--input-type=module', '-'],
+				{
+					input: source,
+					encoding: 'utf8',
+				},
+			);
+			assert.equal(result.status, 0, result.stderr);
+			assert.equal(result.stdout.trim(), 'Imported without running CLI.');
+		}
 	});
-	assert.equal(passed.status, 0, passed.stderr);
-	assert.match(passed.stdout, /release bundle targets are configured/);
-});
 
 test('accepts Tauri public-key exports and rejects private, truncated and malformed inputs', () => {
 	const key = publicKey();

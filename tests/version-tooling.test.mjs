@@ -5,7 +5,11 @@ import {
 	readFileSync,
 	writeFileSync,
 	rmSync,
+	cpSync,
+	realpathSync,
+	symlinkSync,
 } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -42,6 +46,44 @@ function project(t, crlf = false) {
 	const before = Object.fromEntries(files.map(file => [file, read(file)]));
 	return { root, read, before };
 }
+
+test('version CLI validates and detects drift through a symlinked project directory', t => {
+	const p = project(t);
+	mkdirSync(path.join(p.root, 'scripts'));
+	cpSync(
+		new URL('../scripts/version.mjs', import.meta.url),
+		path.join(p.root, 'scripts/version.mjs'),
+	);
+	const temporary = mkdtempSync(
+		path.join(os.tmpdir(), 'slime2-version-link-'),
+	);
+	t.after(() => rmSync(temporary, { recursive: true, force: true }));
+	const alias = path.join(temporary, 'linked project');
+	symlinkSync(
+		realpathSync(p.root),
+		alias,
+		process.platform === 'win32' ? 'junction' : 'dir',
+	);
+	const script = path.join(alias, 'scripts/version.mjs');
+	const passed = spawnSync(process.execPath, [script, '--check'], {
+		encoding: 'utf8',
+	});
+	assert.equal(passed.status, 0, passed.stderr);
+	assert.match(passed.stdout, /Verified app version/);
+	const file = 'src-overlay/package.json';
+	const config = JSON.parse(p.read(file));
+	config.version = '0.0.1';
+	writeFileSync(
+		path.join(p.root, file),
+		JSON.stringify(config, null, '\t') + '\n',
+	);
+	const failed = spawnSync(process.execPath, [script, '--check'], {
+		encoding: 'utf8',
+	});
+	assert.equal(failed.status, 1);
+	assert.match(failed.stderr, /Version drift/);
+	assert.equal(JSON.parse(p.read(file)).version, '0.0.1');
+});
 
 for (const crlf of [false, true])
 	test(`version bump preserves dependencies, independent crate versions and ${crlf ? 'CRLF' : 'LF'} formatting`, t => {
