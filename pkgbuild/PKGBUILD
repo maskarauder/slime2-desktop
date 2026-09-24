@@ -1,6 +1,6 @@
 pkgname=slime2
 pkgdesc="Local Stream Widget Manager"
-pkgver=1.5.0
+pkgver=1.5.2
 pkgrel=1
 # Filled in by the publish workflow; keep the Arch pkgver free of hyphens.
 _release_suffix=""
