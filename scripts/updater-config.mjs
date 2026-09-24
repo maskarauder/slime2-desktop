@@ -44,6 +44,30 @@ export function validatePublicKey(input) {
 	return encoded;
 }
 
+// The release workflow publishes updater installers for all three desktop OSes.
+// A DMG's intermediate .app does not enable Tauri's .app.tar.gz generation.
+export function validateReleaseBundles(config) {
+	if (config.bundle?.active !== true)
+		throw new Error(
+			'Release builds require bundle.active=true in tauri.conf.json.',
+		);
+	const targets = config.bundle.targets ?? 'all';
+	if (targets === 'all') return;
+	for (const [target, platform] of [
+		['app', 'macOS'],
+		['msi', 'Windows'],
+		['appimage', 'Linux'],
+	]) {
+		if (!Array.isArray(targets) || !targets.includes(target))
+			throw new Error(
+				`Missing ${platform} updater bundle target "${target}" in src-tauri/tauri.conf.json. ` +
+					(target === 'app'
+						? 'Include "app" alongside "dmg" to generate .app.tar.gz and its signature.'
+						: `Include "${target}" before building the release.`),
+			);
+	}
+}
+
 export function configureUpdater(projectRoot, input) {
 	const pubkey = validatePublicKey(input);
 	const destination = path.join(projectRoot, configFile);
@@ -105,7 +129,10 @@ function main(args) {
 			readFileSync(path.join(root, configFile), 'utf8'),
 		);
 		validatePublicKey(config.plugins?.updater?.pubkey ?? '');
-		console.log('Updater public key is configured.');
+		validateReleaseBundles(config);
+		console.log(
+			'Updater public key and release bundle targets are configured.',
+		);
 		return;
 	}
 	const changed = configureUpdater(

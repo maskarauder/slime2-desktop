@@ -95,6 +95,14 @@ rerun that job, not the complete release workflow.
 
 ## Local builds and troubleshooting
 
+Keep both `"app"` and `"dmg"` in `bundle.targets` in
+`src-tauri/tauri.conf.json`. With Tauri 2.11.4, requesting only `"dmg"` produces a
+successful macOS installer build but no `.app.tar.gz` updater archive or signature.
+The release preparation command `node scripts/updater-config.mjs --check` checks
+the required `app`, `msi` and `appimage` targets before any platform builds start.
+The DMG remains available for manual installation; automatic updates use the
+signed `.app.tar.gz` archive.
+
 Regular `npm run build -- --bundles msi`, `npm run verify` and pull-request CI do
 not require private signing secrets. Only the publish workflow enables
 `bundle.createUpdaterArtifacts` using a build-time configuration override. A
