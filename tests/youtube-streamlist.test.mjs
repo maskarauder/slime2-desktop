@@ -323,6 +323,115 @@ test('native adapter closes a pending read when aborted', async () => {
 	assert.equal(getEventListeners(h.controller.signal, 'abort').length, 0);
 });
 
+test('native empty EOF never reports a connected stream or fabricates gRPC 14 and still falls back', async () => {
+	let opens = 0;
+	let closes = 0;
+	const transitions = [];
+	const h = harness({
+		invoke: async command => {
+			if (command === 'open_youtube_chat_stream') opens++;
+			if (command === 'next_youtube_chat_batch') return null;
+			if (command === 'close_youtube_chat_stream') closes++;
+		},
+	});
+	h.options.onStatus = status => transitions.push(status);
+	h.dependencies.poll = async () => {
+		h.controller.abort();
+		return { data: batch([], 'rest-page') };
+	};
+	await h.run();
+	assert.equal(opens, 3);
+	assert.equal(closes, 3);
+	assert.deepEqual(h.delays, [5000, 10000, 30000]);
+	assert(
+		!transitions.some(
+			s => s.transport === 'grpc' && s.state === 'connected',
+		),
+	);
+	const log = JSON.stringify(h.logs);
+	assert(log.includes('STREAM_EMPTY_EOF'));
+	assert(log.includes('response batches: 0'));
+	assert(!log.includes('GRPC_14'));
+	assert(!log.includes('receiving responses'));
+	assert(!log.includes('test-token'));
+});
+
+test('a valid empty batch establishes readiness and later clean EOF retains its own classification', async () => {
+	let reads = 0;
+	let closes = 0;
+	let connected = 0;
+	const h = harness({
+		invoke: async command => {
+			if (command === 'next_youtube_chat_batch')
+				return ++reads === 1 ? batch([], 'private-next-page') : null;
+			if (command === 'close_youtube_chat_stream') closes++;
+		},
+	});
+	const stream = h.streamYouTubeChat(
+		'account',
+		'chat',
+		'private-initial-page',
+		h.controller.signal,
+		() => connected++,
+	);
+	const response = await stream.next();
+	assert.equal(connected, 1);
+	assert.equal(response.done, false);
+	assert.equal(response.value.items.length, 0);
+	await assert.rejects(stream.next(), error => {
+		assert.equal(error.streamCode, 'STREAM_EOF');
+		assert.equal(error.grpcCode, undefined);
+		assert.match(
+			error.message,
+			/response batches: 1; continuation supplied: yes/,
+		);
+		assert(!error.message.includes('private-'));
+		return true;
+	});
+	assert.equal(connected, 1);
+	assert.equal(closes, 1);
+});
+
+test('actual native gRPC failures retain their code while unknown IPC failures get no invented gRPC status', async () => {
+	for (const [failure, grpcCode, streamCode] of [
+		[
+			{ code: 14, message: 'YouTube stream transport failed.' },
+			14,
+			undefined,
+		],
+		[
+			{
+				message: 'private-token native failure',
+				headers: { authorization: 'private-token' },
+			},
+			undefined,
+			'NATIVE_STREAM_ERROR',
+		],
+	]) {
+		let closes = 0;
+		const h = harness({
+			invoke: async command => {
+				if (command === 'next_youtube_chat_batch') throw failure;
+				if (command === 'close_youtube_chat_stream') closes++;
+			},
+		});
+		const stream = h.streamYouTubeChat(
+			'account',
+			'chat',
+			undefined,
+			h.controller.signal,
+		);
+		await assert.rejects(stream.next(), error => {
+			assert.equal(error.grpcCode, grpcCode);
+			assert.equal(error.streamCode, streamCode);
+			assert(!error.message.includes('private-token'));
+			return true;
+		});
+		assert.equal(closes, 1);
+		assert(!h.logs.length);
+	}
+});
+
 test('abort while native open is pending repeats cleanup after open settles', async () => {
 	let completeOpen;
 	let ready;

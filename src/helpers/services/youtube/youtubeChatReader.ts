@@ -2,7 +2,11 @@ import youtubeApi from './youtubeApi';
 import type { ConnectionUpdate } from '../../connectionStatus';
 import { YouTubeReauthorizationError } from './youtubeAuth';
 import { getYouTubeErrorDetails } from './youtubeError';
-import { streamYouTubeChat, YouTubeStreamError } from './youtubeStream';
+import {
+	streamYouTubeChat,
+	streamEndedError,
+	YouTubeStreamError,
+} from './youtubeStream';
 import type {
 	YouTubeLiveChatMessage,
 	YouTubeLiveChatMessageListResponse,
@@ -201,7 +205,11 @@ export async function readYouTubeChat(
 			}
 
 			mode = 'stream';
-			status({ state: 'connecting', transport: 'grpc' });
+			status({
+				state: 'connecting',
+				transport: 'grpc',
+				detail: 'Waiting for the first streamList response',
+			});
 			streamStartedAt = now();
 			let ended = false;
 			for await (const batch of stream(
@@ -227,10 +235,7 @@ export async function readYouTubeChat(
 				await wait(BROADCAST_RETRY_DELAY, 'waiting', 'Live chat ended');
 				continue;
 			}
-			throw new YouTubeStreamError(
-				14,
-				'YouTube stream closed; resuming from the last received page.',
-			);
+			throw streamEndedError(receivedStreamBatch);
 		} catch (error) {
 			if (signal.aborted) return;
 			const details = getYouTubeErrorDetails(error);

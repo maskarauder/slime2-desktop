@@ -113,6 +113,9 @@ are currently five minutes (`OFFLINE_RETRY_DELAY` and `ERROR_RETRY_DELAY` in
 `src-tauri/src/tiktok.rs`). TikTok normalization forwards chat/emotes and final
 gift streaks. Widgets decide which normalized event types they render.
 
+See [CONNECTION-RECOVERY.md](CONNECTION-RECOVERY.md) for TLS initialization,
+TikTok reader panic recovery and YouTube EOF/readiness diagnostic codes.
+
 ## Shared state, account linking and emotes
 
 `src/hooks/useWidgetRequest.ts` validates and routes widget requests. Generic

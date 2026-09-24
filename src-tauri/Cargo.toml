@@ -28,6 +28,7 @@ nanoid = "0.5.0"
 notify = "8.2.0"
 notify-debouncer-full = "0.7.0"
 reqwest = "0.13.4"
+rustls = { version = "0.23.45", default-features = false, features = ["ring", "std", "tls12"] }
 sysinfo = "0.39.6"
 tauri-plugin-clipboard-manager = "2.3.2"
 tauri-plugin-dialog = "2.7.2"

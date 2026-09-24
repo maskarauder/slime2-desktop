@@ -20,6 +20,7 @@ mod server;
 mod session_tasks;
 mod tiktok;
 mod tiktok_lookup;
+mod tls;
 mod watcher;
 mod youtube;
 
@@ -45,6 +46,8 @@ struct AppState {
 
 #[tokio::main]
 async fn main() {
+	tls::initialize();
+
 	#[cfg(target_os = "linux")]
 	{
 		// blank screen fix for linux

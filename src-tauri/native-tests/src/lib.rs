@@ -12,3 +12,5 @@ mod policy;
 mod session_tasks;
 #[path = "../../src/tiktok_lookup.rs"]
 mod tiktok_lookup;
+#[path = "../../src/tls.rs"]
+mod tls;

@@ -1,13 +1,14 @@
-use crate::session_tasks::SessionTasks;
+use crate::session_tasks::{guard_reader, SessionTasks};
 use futures::{SinkExt, StreamExt};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
-use tokio::time::{Duration, sleep, timeout};
+use tokio::time::{sleep, timeout, Duration};
 use tokio_tungstenite::{
-	WebSocketStream, connect_async_with_config,
+	connect_async_with_config,
 	tungstenite::{
-		Error as WebSocketError, Message, protocol::WebSocketConfig,
+		protocol::WebSocketConfig, Error as WebSocketError, Message,
 	},
+	WebSocketStream,
 };
 use url::Url;
 
@@ -38,14 +39,33 @@ impl TikTokConnections {
 		self.tasks
 			.replace(account_id, session_id, || {
 				tokio::spawn(async move {
-					consume_live_chat(
-						task_account_id,
-						task_session_id,
-						unique_id,
-						api_key,
-						app_handle,
-					)
-					.await;
+					loop {
+						if guard_reader(consume_live_chat(
+							task_account_id.clone(),
+							task_session_id.clone(),
+							unique_id.clone(),
+							api_key.clone(),
+							app_handle.clone(),
+						))
+						.await
+						.is_ok()
+						{
+							break;
+						}
+						// The task used to die silently, leaving the UI stuck at
+						// "connecting" forever. Do not expose a panic's payload:
+						// library errors can contain the authenticated URL.
+						log::error!("TikTok LIVE reader stopped unexpectedly; retrying in five minutes.");
+						emit_status(
+							&app_handle,
+							&task_account_id,
+							&task_session_id,
+							"reconnecting",
+							None,
+							Some("The native TikTok reader stopped unexpectedly; retrying in five minutes.".into()),
+						);
+						sleep(ERROR_RETRY_DELAY).await;
+					}
 				})
 			})
 			.await;
@@ -97,6 +117,7 @@ async fn consume_live_chat(
 	};
 
 	loop {
+		log::info!("TikTok LIVE connection attempt starting.");
 		emit_status(
 			&app_handle,
 			&account_id,
@@ -160,7 +181,7 @@ async fn consume_live_chat(
 					&session_id,
 					"reconnecting",
 					status,
-					Some("Unable to connect to Euler Stream.".to_string()),
+					Some(websocket_error_message(&error).to_string()),
 				);
 				sleep(ERROR_RETRY_DELAY).await;
 				continue;
@@ -327,9 +348,11 @@ where
 			) {
 				return Err("Unable to send an Euler Stream heartbeat probe.");
 			}
-			timeout(probe_timeout, websocket.next()).await.map_err(
-				|_| "Euler Stream heartbeat timed out; reconnecting.",
-			)?
+			timeout(probe_timeout, websocket.next())
+				.await
+				.map_err(|_| {
+					"Euler Stream heartbeat timed out; reconnecting."
+				})?
 		}
 	};
 	result
@@ -366,6 +389,23 @@ fn websocket_error_status(error: &WebSocketError) -> Option<u16> {
 	match error {
 		WebSocketError::Http(response) => Some(response.status().as_u16()),
 		_ => None,
+	}
+}
+
+fn websocket_error_message(error: &WebSocketError) -> &'static str {
+	// Keep credentials and provider-controlled response bodies out of logs.
+	match error {
+		WebSocketError::Tls(_) => "Euler Stream TLS handshake failed.",
+		WebSocketError::Io(_) => {
+			"Euler Stream network connection failed (DNS, TCP or socket I/O)."
+		}
+		WebSocketError::Http(_) => {
+			"Euler Stream rejected the WebSocket handshake."
+		}
+		WebSocketError::Protocol(_) => {
+			"Euler Stream WebSocket protocol negotiation failed."
+		}
+		_ => "Unable to connect to Euler Stream.",
 	}
 }
 

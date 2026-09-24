@@ -7,8 +7,8 @@ use crate::proto::{
 	*,
 };
 use std::pin::Pin;
-use tokio_stream::{Stream, wrappers::TcpListenerStream};
-use tonic::{Response, transport::Server};
+use tokio_stream::{wrappers::TcpListenerStream, Stream};
+use tonic::{transport::Server, Response};
 
 #[test]
 fn command_futures_can_move_between_tauri_threads() {
@@ -55,11 +55,20 @@ impl V3DataLiveChatMessageService for MockYouTube {
 		if self.mode == "idle" {
 			return Ok(Response::new(Box::pin(tokio_stream::pending())));
 		}
+		if self.mode == "empty" {
+			return Ok(Response::new(Box::pin(tokio_stream::empty())));
+		}
 		let response = LiveChatMessageListResponse {
 			next_page_token: Some("resume-after-1".into()),
 			items: vec![text_message("1")],
 			..Default::default()
 		};
+		if self.mode == "trailer-error" {
+			return Ok(Response::new(Box::pin(tokio_stream::iter([
+				Ok(response),
+				Err(Status::unavailable("private-upstream-details")),
+			]))));
+		}
 		Ok(Response::new(Box::pin(tokio_stream::iter([Ok(response)]))))
 	}
 }
@@ -146,8 +155,47 @@ async fn reads_real_grpc_frames_with_oauth_and_resume_token() {
 }
 
 #[tokio::test]
-async fn stopping_idle_reader_cancels_pending_read_and_old_stop_cannot_close_new_reader()
- {
+async fn clean_empty_completion_is_distinct_from_a_real_grpc_trailer_error() {
+	for mode in ["empty", "trailer-error"] {
+		let (url, _, server) = server(mode).await;
+		let streams = YouTubeStreams::default();
+		streams
+			.open_at(
+				"account".into(),
+				"session".into(),
+				"test-token".into(),
+				"chat".into(),
+				None,
+				&url,
+			)
+			.await
+			.unwrap();
+		if mode == "empty" {
+			assert!(streams
+				.next("account", "session")
+				.await
+				.unwrap()
+				.is_none());
+		} else {
+			assert!(streams
+				.next("account", "session")
+				.await
+				.unwrap()
+				.is_some());
+			let error = streams.next("account", "session").await.unwrap_err();
+			assert_eq!(error.code, 14);
+			assert!(!serde_json::to_string(&error)
+				.unwrap()
+				.contains("private-upstream-details"));
+		}
+		assert!(streams.entries.lock().unwrap().is_empty());
+		server.abort();
+	}
+}
+
+#[tokio::test]
+async fn stopping_idle_reader_cancels_pending_read_and_old_stop_cannot_close_new_reader(
+) {
 	let (url, _, server) = server("idle").await;
 	let streams = Arc::new(YouTubeStreams::default());
 	streams

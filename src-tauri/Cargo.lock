@@ -4839,6 +4839,7 @@ dependencies = [
  "notify",
  "notify-debouncer-full",
  "reqwest",
+ "rustls",
  "serde",
  "serde_json",
  "slime2-youtube-stream",

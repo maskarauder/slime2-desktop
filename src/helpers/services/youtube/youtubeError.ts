@@ -42,6 +42,15 @@ export function getYouTubeErrorDetails(error: unknown): YouTubeErrorDetails {
 	}
 
 	if (error instanceof Error) {
+		if (
+			'streamCode' in error &&
+			typeof error.streamCode === 'string' &&
+			['STREAM_EMPTY_EOF', 'STREAM_EOF', 'NATIVE_STREAM_ERROR'].includes(
+				error.streamCode,
+			)
+		) {
+			return { message: error.message, code: error.streamCode };
+		}
 		if ('grpcCode' in error && typeof error.grpcCode === 'number') {
 			return { message: error.message, code: `GRPC_${error.grpcCode}` };
 		}
