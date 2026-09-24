@@ -454,21 +454,86 @@ pub fn apply_pending(paths: &Paths) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use std::sync::atomic::{AtomicU64, Ordering};
+	static NEXT_FIXTURE: AtomicU64 = AtomicU64::new(0);
+
 	fn paths() -> Paths {
-		let base = std::env::temp_dir().join(format!(
-			"slime2-backup-{}-{}",
-			std::process::id(),
+		paths_at(
 			std::time::SystemTime::now()
 				.duration_since(std::time::UNIX_EPOCH)
 				.unwrap()
-				.as_nanos()
-		));
-		fs::create_dir_all(&base).unwrap();
+				.as_nanos(),
+		)
+	}
+	fn paths_at(timestamp: u128) -> Paths {
+		// A clock reading is not unique, even when expressed in nanoseconds.
+		// Reserve a directory exclusively so concurrent tests and stale files
+		// from an earlier process can never share a fixture.
+		let base = loop {
+			let sequence = NEXT_FIXTURE.fetch_add(1, Ordering::Relaxed);
+			let candidate = std::env::temp_dir().join(format!(
+				"slime2-backup-{}-{timestamp}-{sequence}",
+				std::process::id(),
+			));
+			match fs::create_dir(&candidate) {
+				Ok(()) => break candidate,
+				Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+					continue;
+				}
+				Err(error) => {
+					panic!("Unable to create backup test directory: {error}")
+				}
+			}
+		};
 		Paths {
 			config: base.join("config"),
 			tiles: base.join("tiles"),
 			media: base.join("media"),
 			state: base,
+		}
+	}
+	#[test]
+	fn fixtures_with_identical_timestamps_remain_isolated() {
+		let fixtures = std::thread::scope(|scope| {
+			let workers: Vec<_> =
+				(0..8).map(|_| scope.spawn(|| paths_at(0))).collect();
+			workers
+				.into_iter()
+				.map(|worker| worker.join().unwrap())
+				.collect::<Vec<_>>()
+		});
+		let dirty = &fixtures[0];
+		fs::create_dir_all(&dirty.config).unwrap();
+		fs::write(dirty.config.join("settings.json"), "unchanged").unwrap();
+
+		// Model the malformed fixture used by the invalid-archive test beside
+		// the empty-installation test, without relying on clock resolution.
+		let empty = &fixtures[1];
+		let archive = empty.state.join("empty.zip");
+		let token = "00000000000000000000000000000005";
+		create(empty, &archive, "1.5.0").unwrap();
+		stage(empty, &archive, token).unwrap();
+		schedule(empty, token).unwrap();
+		apply_pending(empty).unwrap();
+		assert_eq!(
+			json_file(&empty.config.join("tile_locations.json")).unwrap(),
+			json!({})
+		);
+		assert!(!empty.config.join("settings.json").exists());
+		assert_eq!(
+			fs::read_to_string(dirty.config.join("settings.json")).unwrap(),
+			"unchanged"
+		);
+		assert_eq!(
+			fixtures
+				.iter()
+				.map(|p| &p.state)
+				.collect::<HashSet<_>>()
+				.len(),
+			fixtures.len()
+		);
+		for fixture in fixtures {
+			fs::remove_dir_all(fixture.state).unwrap();
 		}
 	}
 	#[test]
