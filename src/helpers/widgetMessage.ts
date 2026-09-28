@@ -179,6 +179,15 @@ export async function sendSharedWidgetStorageChange(
 	});
 }
 
+export async function sendEmoteCatalogUpdate(
+	widgetId: string,
+	data: Record<string, unknown>,
+) {
+	return sendWidgetMessage(widgetId, 'emote-catalog-update', data, {
+		dispatchToBot: true,
+	});
+}
+
 async function sendWidgetMessage(
 	widgetId: string,
 	type: string,

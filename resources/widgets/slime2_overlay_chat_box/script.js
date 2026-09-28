@@ -21,6 +21,7 @@ const ALPHA_MULTIPLY_COLOR_MATRIX = [
 ];
 
 const Widget = {
+	connected: true,
 	readAccounts: {
 		twitch: { id: '' },
 		youtube: { id: '' },
@@ -36,12 +37,24 @@ const Widget = {
 const Twitch = {
 	badges: new Map(),
 	cheermotes: new Map(),
-	thirdPartyEmotes: new Map(),
+	...createEmoteCatalog(),
 };
 
-const YouTube = {
-	thirdPartyEmotes: new Map(),
-};
+const YouTube = createEmoteCatalog();
+
+function createEmoteCatalog() {
+	return {
+		generation: 0,
+		sevenTvRevision: -1,
+		emoteLayers: {
+			youtube: new Map(),
+			bttv: new Map(),
+			ffz: new Map(),
+			seventv: new Map(),
+		},
+		thirdPartyEmotes: new Map(),
+	};
+}
 
 const NO_THIRD_PARTY_EMOTES = new Map();
 const GIF_IMAGE_CLEANUP = new WeakMap();
@@ -55,6 +68,91 @@ addEventListener('slime2:widget-accounts', widgetAccountsListener);
 addEventListener('slime2:twitch-event', twitchEventListener);
 addEventListener('slime2:youtube-event', youtubeEventListener);
 addEventListener('slime2:tiktok-event', tiktokEventListener);
+addEventListener('slime2:emote-catalog-update', emoteCatalogUpdateListener);
+addEventListener('slime2:connected', widgetConnectedListener);
+addEventListener('slime2:disconnected', widgetDisconnectedListener);
+
+function replaceEmoteLayer(catalog, provider, emotes, nameKey = 'name') {
+	// Missing/failed refreshes retain the last known provider catalog.
+	if (!Array.isArray(emotes)) return;
+	const layer = new Map();
+	for (const emote of emotes) {
+		if (typeof emote?.[nameKey] !== 'string' || !emote[nameKey]) continue;
+		layer.set(emote[nameKey], { type: provider, data: emote });
+	}
+	catalog.emoteLayers[provider] = layer;
+	// A replacement removes old aliases and reveals overridden providers.
+	// Only future messages use this lookup; displayed message DOM is unchanged.
+	catalog.thirdPartyEmotes = new Map([
+		...catalog.emoteLayers.youtube,
+		...catalog.emoteLayers.bttv,
+		...catalog.emoteLayers.ffz,
+		...catalog.emoteLayers.seventv,
+	]);
+}
+
+function applySevenTvCatalog(catalog, emotes, revision) {
+	if (
+		!Array.isArray(emotes) ||
+		!emotes.every(
+			emote =>
+				typeof emote?.name === 'string' &&
+				emote.name.length > 0 &&
+				typeof emote.srcAnimated === 'string' &&
+				emote.srcAnimated.length > 0 &&
+				typeof emote.srcStatic === 'string' &&
+				emote.srcStatic.length > 0,
+		) ||
+		!Number.isSafeInteger(revision) ||
+		revision < 0 ||
+		revision <= catalog.sevenTvRevision
+	)
+		return;
+	catalog.sevenTvRevision = revision;
+	replaceEmoteLayer(catalog, 'seventv', emotes);
+}
+
+function emoteCatalogUpdateListener(event) {
+	const data = event.detail;
+	if (
+		!Widget.connected ||
+		data?.provider !== 'seventv' ||
+		!['twitch', 'youtube'].includes(data.platform) ||
+		!data.account_id ||
+		Widget.readAccounts[data.platform].id !== data.account_id
+	)
+		return;
+	applySevenTvCatalog(
+		data.platform === 'twitch' ? Twitch : YouTube,
+		data.emotes,
+		data.revision,
+	);
+}
+
+function invalidateEmoteCatalog(catalog, clear = true) {
+	catalog.generation++;
+	catalog.sevenTvRevision = -1;
+	if (!clear) return;
+	for (const provider of Object.keys(catalog.emoteLayers)) {
+		catalog.emoteLayers[provider] = new Map();
+	}
+	catalog.thirdPartyEmotes = new Map();
+}
+
+function widgetDisconnectedListener() {
+	Widget.connected = false;
+	// Old in-flight responses must not survive a local app connection reset.
+	invalidateEmoteCatalog(Twitch, false);
+	invalidateEmoteCatalog(YouTube, false);
+}
+
+async function widgetConnectedListener() {
+	Widget.connected = true;
+	await Promise.all([
+		loadTwitchAccountAssets(Widget.readAccounts.twitch, true),
+		loadYouTubeAccountAssets(Widget.readAccounts.youtube, true),
+	]);
+}
 
 function widgetValuesListener(event) {
 	Widget.values = new Map(Object.entries(event.detail));
@@ -290,24 +388,28 @@ async function loadTikTokAccount(newReadAccount) {
 		: { id: '' };
 }
 
-async function loadTwitchAccountAssets(newReadAccount) {
+async function loadTwitchAccountAssets(newReadAccount, force = false) {
 	if (!newReadAccount?.id) {
 		Widget.readAccounts.twitch = { id: '' };
 		Twitch.badges.clear();
 		Twitch.cheermotes.clear();
-		Twitch.thirdPartyEmotes.clear();
+		invalidateEmoteCatalog(Twitch);
 		return;
 	}
 
-	// same account as stored account or undefined, skip processing
-	if (Widget.readAccounts.twitch.id === newReadAccount.id) {
+	const sameAccount =
+		Widget.readAccounts.twitch.id === newReadAccount.id &&
+		Widget.readAccounts.twitch.serviceId === newReadAccount.serviceId;
+	if (!force && sameAccount) {
 		return;
 	}
 
 	Widget.readAccounts.twitch = newReadAccount;
 	Twitch.badges.clear();
 	Twitch.cheermotes.clear();
-	Twitch.thirdPartyEmotes.clear();
+	invalidateEmoteCatalog(Twitch, !sameAccount);
+	const generation = Twitch.generation;
+	if (!Widget.connected) return;
 
 	const [
 		cheermotes,
@@ -316,32 +418,27 @@ async function loadTwitchAccountAssets(newReadAccount) {
 		bttvUser,
 		ffzRoom,
 		sevenTvUser,
-	] = await Promise.all([
-		getTwitchCheermotes(newReadAccount),
-		getTwitchGlobalBadges(newReadAccount),
-		getTwitchChannelChatBadges(newReadAccount),
-		getBttvUser(newReadAccount),
-		getFfzRoom(newReadAccount),
-		getSevenTvUser(newReadAccount),
-	]);
+	] = (
+		await Promise.allSettled([
+			getTwitchCheermotes(newReadAccount),
+			getTwitchGlobalBadges(newReadAccount),
+			getTwitchChannelChatBadges(newReadAccount),
+			getBttvUser(newReadAccount),
+			getFfzRoom(newReadAccount),
+			getSevenTvUser(newReadAccount),
+		])
+	).map(result => (result.status === 'fulfilled' ? result.value : null));
+	if (!Widget.connected || Twitch.generation !== generation) return;
 
-	// collect bttv emotes into Twitch.thirdPartyEmotes
-	bttvUser?.emotes?.forEach(emote => {
-		Twitch.thirdPartyEmotes.set(emote.code, { type: 'bttv', data: emote });
-	});
-
-	// collect ffz emotes into Twitch.thirdPartyEmotes
-	ffzRoom?.emotes?.forEach(emote => {
-		Twitch.thirdPartyEmotes.set(emote.name, { type: 'ffz', data: emote });
-	});
-
-	// collect 7TV emotes into Twitch.thirdPartyEmotes
-	sevenTvUser?.emotes?.forEach(emote => {
-		Twitch.thirdPartyEmotes.set(emote.name, {
-			type: 'seventv',
-			data: emote,
-		});
-	});
+	replaceEmoteLayer(Twitch, 'bttv', bttvUser?.emotes, 'code');
+	replaceEmoteLayer(Twitch, 'ffz', ffzRoom?.emotes);
+	// Legacy app responses have no revision and are accepted only before a
+	// newer snapshot. A live update received during loading takes precedence.
+	applySevenTvCatalog(
+		Twitch,
+		sevenTvUser?.emotes,
+		sevenTvUser?.revision ?? 0,
+	);
 
 	// collect global badges into Twitch.badges
 	globalBadges?.forEach(badge => {
@@ -397,49 +494,43 @@ async function loadTwitchAccountAssets(newReadAccount) {
 	});
 }
 
-async function loadYouTubeAccountAssets(newReadAccount) {
+async function loadYouTubeAccountAssets(newReadAccount, force = false) {
 	if (!newReadAccount?.id) {
 		Widget.readAccounts.youtube = { id: '' };
-		YouTube.thirdPartyEmotes.clear();
+		invalidateEmoteCatalog(YouTube);
 		return;
 	}
 
-	if (Widget.readAccounts.youtube.id === newReadAccount.id) {
+	const sameAccount =
+		Widget.readAccounts.youtube.id === newReadAccount.id &&
+		Widget.readAccounts.youtube.serviceId === newReadAccount.serviceId;
+	if (!force && sameAccount) {
 		return;
 	}
 
 	Widget.readAccounts.youtube = newReadAccount;
-	YouTube.thirdPartyEmotes.clear();
+	invalidateEmoteCatalog(YouTube, !sameAccount);
+	const generation = YouTube.generation;
+	if (!Widget.connected) return;
 
-	const [youtubeGlobalEmotes, bttvUser, ffzRoom, sevenTvUser] =
-		await Promise.all([
+	const [youtubeGlobalEmotes, bttvUser, ffzRoom, sevenTvUser] = (
+		await Promise.allSettled([
 			getYouTubeGlobalEmotes(newReadAccount),
 			getBttvUser(newReadAccount),
 			getFfzRoom(newReadAccount),
 			getSevenTvUser(newReadAccount),
-		]);
+		])
+	).map(result => (result.status === 'fulfilled' ? result.value : null));
+	if (!Widget.connected || YouTube.generation !== generation) return;
 
-	youtubeGlobalEmotes?.forEach(emote => {
-		YouTube.thirdPartyEmotes.set(emote.name, {
-			type: 'youtube',
-			data: emote,
-		});
-	});
-
-	bttvUser?.emotes?.forEach(emote => {
-		YouTube.thirdPartyEmotes.set(emote.code, { type: 'bttv', data: emote });
-	});
-
-	ffzRoom?.emotes?.forEach(emote => {
-		YouTube.thirdPartyEmotes.set(emote.name, { type: 'ffz', data: emote });
-	});
-
-	sevenTvUser?.emotes?.forEach(emote => {
-		YouTube.thirdPartyEmotes.set(emote.name, {
-			type: 'seventv',
-			data: emote,
-		});
-	});
+	replaceEmoteLayer(YouTube, 'youtube', youtubeGlobalEmotes);
+	replaceEmoteLayer(YouTube, 'bttv', bttvUser?.emotes, 'code');
+	replaceEmoteLayer(YouTube, 'ffz', ffzRoom?.emotes);
+	applySevenTvCatalog(
+		YouTube,
+		sevenTvUser?.emotes,
+		sevenTvUser?.revision ?? 0,
+	);
 }
 
 function twitchEventListener(event) {

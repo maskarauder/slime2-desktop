@@ -20,6 +20,7 @@ import { useUnsuspender } from '@/hooks/useUnsuspender';
 import useWidgetCoreChange from '@/hooks/useWidgetCoreChange';
 import useWidgetRegistration from '@/hooks/useWidgetRegistration';
 import useWidgetRequest from '@/hooks/useWidgetRequest';
+import useSevenTvEmotes from '@/hooks/useSevenTvEmotes';
 import useYouTubeChat from '@/hooks/useYouTubeChat';
 import PaperAirplaneSvg from '@@/svg/PaperAirplaneSvg';
 import type { TabPanelProps, TabProps } from '@ariakit/react';
@@ -44,6 +45,7 @@ function MainTabsHooksWrapper({ children }: Props.WithChildren) {
 	useSystemFontsQuery();
 	useWidgetRegistration();
 	useWidgetRequest();
+	useSevenTvEmotes();
 	useWidgetCoreChange();
 	useTwitchWebsocket();
 	useTwitchBot();

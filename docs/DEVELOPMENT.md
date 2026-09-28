@@ -146,6 +146,9 @@ Emote services live under `src/helpers/services/emotes/`. In particular,
 shortcode catalog; it is not a fresh catalog downloaded from YouTube's Data API.
 Provider emote caches and in-flight requests are shared in the app. The widget
 chooses animated/static images and handles unknown shortcode rendering.
+7TV uses a shared live event connection with a 15-minute catalog reconciliation;
+widgets receive generic catalog replacements. See [seventv-live-emotes.md](seventv-live-emotes.md)
+for the request/event contract, recovery behavior and consumer requirements.
 
 ## Offline fixtures and regression tests
 

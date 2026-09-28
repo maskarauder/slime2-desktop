@@ -81,6 +81,7 @@
 					"https://api.betterttv.net",
 					"https://api.frankerfacez.com",
 					"https://7tv.io",
+					"wss://events.7tv.io",
 					"https://pluralmind.chat"
 				],
 				"style-src": ["'self'", "https://fonts.googleapis.com"],

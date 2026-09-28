@@ -116,6 +116,7 @@ export default function useTwitchBot() {
 			'widget-button-click',
 			'widget-response',
 			'shared-widget-storage-change',
+			'emote-catalog-update',
 		];
 
 		// directly passing the above events into the bots

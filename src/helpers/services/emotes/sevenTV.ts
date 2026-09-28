@@ -1,72 +1,77 @@
-import { createCachedJsonGet } from '../requestCache';
 import axios from 'axios';
+import { createSevenTvLive } from './sevenTvLive';
+import type { RawEmote, RawSet, RawUser, SevenTvEmote } from './sevenTvLive';
+export type {
+	SevenTvAccount,
+	SevenTvEmote,
+	SevenTvPlatform,
+	SevenTvUpdate,
+} from './sevenTvLive';
 
 const sevenTvAxios = axios.create({
 	baseURL: 'https://7tv.io/v3',
+	timeout: 5000,
 });
-const cachedGet = createCachedJsonGet(sevenTvAxios);
-
-type SevenTvImageFile = {
-	name: string;
-	static_name?: string;
-	width: number;
-	format: string;
-};
-
-type SevenTvImageHost = {
-	url: string;
-	files: SevenTvImageFile[];
-};
-
-type SevenTvEmote = {
-	id: string;
-	name: string;
-	data?: {
-		animated?: boolean;
-		host?: SevenTvImageHost;
-	};
-};
-
-type SevenTvEmoteSet = {
-	id: string;
-	name: string;
-	emotes?: SevenTvEmote[];
-};
-
-type SevenTvUserResponse = {
-	emote_set?: SevenTvEmoteSet | null;
-	emote_set_id?: string | null;
-};
-
-async function getEmoteSet(id: string): Promise<SevenTvEmoteSet | null> {
-	return cachedGet<SevenTvEmoteSet>(`/emote-sets/${id}`)
+// Bypass the shared five-minute request cache: EventAPI and reconciliation need
+// current catalogs. Deduplicate concurrent HTTP requests without caching errors.
+const pending = new Map<
+	string,
+	{ promise: Promise<unknown>; signal: AbortSignal }
+>();
+function get<T>(
+	path: string,
+	signal: AbortSignal,
+	missingSetAware = false,
+): Promise<T | null> {
+	const existing = pending.get(path);
+	if (existing && !existing.signal.aborted)
+		return existing.promise as Promise<T | null>;
+	if (existing) pending.delete(path);
+	if (pending.size >= 128)
+		return Promise.reject(new Error('7TV lookup is busy.'));
+	const task = sevenTvAxios
+		.get<T>(path, {
+			signal,
+			...(missingSetAware
+				? { headers: { 'X-7tv-Missing-EmoteSet-Aware': '1' } }
+				: {}),
+		})
 		.then(response => response.data)
-		.catch(() => null);
+		.catch((error: unknown) => {
+			if (axios.isAxiosError(error) && error.response?.status === 404)
+				return null;
+			throw new Error('7TV catalog temporarily unavailable.');
+		})
+		.finally(() => {
+			if (pending.get(path)?.promise === task) pending.delete(path);
+		});
+	pending.set(path, { promise: task, signal });
+	return task;
 }
 
-function normalizeEmote(emote: SevenTvEmote) {
+export function normalizeSevenTvEmote(emote: RawEmote): SevenTvEmote {
 	const host = emote.data?.host;
-	let largestWebp: SevenTvImageFile | undefined;
-
-	for (const file of host?.files ?? []) {
-		if (file.format.toUpperCase() !== 'WEBP') continue;
-
-		if (!largestWebp || file.width > largestWebp.width) {
-			largestWebp = file;
-		}
+	const files = Array.isArray(host?.files) ? host.files : [];
+	let largestWebp: (typeof files)[number] | undefined;
+	for (const file of files) {
+		if (
+			typeof file?.format !== 'string' ||
+			file.format.toUpperCase() !== 'WEBP'
+		)
+			continue;
+		if (!largestWebp || file.width > largestWebp.width) largestWebp = file;
 	}
-
-	const baseUrl = host?.url
-		? `${host.url.startsWith('//') ? 'https:' : ''}${host.url}`.replace(
-				/\/$/,
-				'',
-			)
-		: `https://cdn.7tv.app/emote/${emote.id}`;
+	const baseUrl =
+		typeof host?.url === 'string' && host.url
+			? `${host.url.startsWith('//') ? 'https:' : ''}${host.url}`.replace(
+					/\/$/,
+					'',
+				)
+			: `https://cdn.7tv.app/emote/${emote.id}`;
 	const animatedFilename = largestWebp?.name ?? '4x.webp';
 	const staticFilename =
 		largestWebp?.static_name ??
 		(emote.data?.animated ? '4x_static.webp' : animatedFilename);
-
 	return {
 		id: emote.id,
 		name: emote.name,
@@ -75,38 +80,16 @@ function normalizeEmote(emote: SevenTvEmote) {
 	};
 }
 
-const sevenTvApi = {
-	async getUser(platform: 'twitch' | 'youtube', userId: string) {
-		// 7TV stores YouTube connections under its `google` platform name.
-		const sevenTvPlatform = platform === 'youtube' ? 'google' : platform;
-		const [globalEmoteSet, user] = await Promise.all([
-			getEmoteSet('global'),
-			cachedGet<SevenTvUserResponse>(
-				`/users/${sevenTvPlatform}/${userId}`,
-				{
-					headers: {
-						'X-7tv-Missing-EmoteSet-Aware': '1',
-					},
-				},
-			)
-				.then(response => response.data)
-				.catch(() => null),
-		]);
-
-		let channelEmoteSet = user?.emote_set ?? null;
-		if (!channelEmoteSet && user?.emote_set_id) {
-			channelEmoteSet = await getEmoteSet(user.emote_set_id);
-		}
-
-		if (!globalEmoteSet && !channelEmoteSet) return null;
-
-		return {
-			emotes: [
-				...(globalEmoteSet?.emotes ?? []),
-				...(channelEmoteSet?.emotes ?? []),
-			].map(normalizeEmote),
-		};
-	},
-};
-
+const sevenTvApi = createSevenTvLive({
+	loadSet: (id, signal) =>
+		get<RawSet>(`/emote-sets/${encodeURIComponent(id)}`, signal),
+	loadUser: (platform, userId, signal) =>
+		get<RawUser>(
+			`/users/${platform === 'youtube' ? 'google' : platform}/${encodeURIComponent(userId)}`,
+			signal,
+			true,
+		),
+	normalize: normalizeSevenTvEmote,
+	connect: url => new WebSocket(url),
+});
 export default sevenTvApi;
