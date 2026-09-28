@@ -10,6 +10,10 @@ import {
 	sendWidgetValues,
 } from '@/helpers/widgetMessage';
 import logZodError from '@/helpers/zodError';
+import {
+	isWidgetUpdating,
+	widgetUpdateGeneration,
+} from '@/helpers/widgetUpdateState';
 import { loadTileMeta } from '@@/json/tileMeta';
 import { loadWidgetMeta } from '@@/json/widgetMeta';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
@@ -31,6 +35,8 @@ export default function useWidgetRegistration() {
 	useEffect(() => {
 		let disposed = false;
 		async function registerWidget(widgetId: string) {
+			if (isWidgetUpdating(widgetId)) return;
+			const generation = widgetUpdateGeneration(widgetId);
 			const [settings, values, widgetMeta, tileMeta] = await Promise.all([
 				loadWidgetSettings(widgetId),
 				loadWidgetValues(widgetId),
@@ -38,7 +44,12 @@ export default function useWidgetRegistration() {
 				loadTileMeta(widgetId),
 			]);
 
-			if (disposed) return;
+			if (
+				disposed ||
+				isWidgetUpdating(widgetId) ||
+				widgetUpdateGeneration(widgetId) !== generation
+			)
+				return;
 			if (latest.current.logWidgetEvents) {
 				await sendLogEvents(widgetId, true);
 			}
@@ -48,6 +59,12 @@ export default function useWidgetRegistration() {
 			);
 
 			await sendWidgetValues(widgetId, settings, values);
+			if (
+				disposed ||
+				isWidgetUpdating(widgetId) ||
+				widgetUpdateGeneration(widgetId) !== generation
+			)
+				return;
 			await sendWidgetAccounts(
 				widgetId,
 				resolveWidgetAccounts(

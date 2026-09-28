@@ -24,6 +24,7 @@ mod tls;
 mod updater;
 mod updater_policy;
 mod watcher;
+mod widget_update;
 mod youtube;
 
 mod account;
@@ -186,6 +187,7 @@ async fn main() {
 		.manage(AppState::default())
 		.manage(commands::backup::RestoreState::default())
 		.setup(|app: &mut tauri::App| {
+			commands::widget_update::recover_pending(app.handle()).map_err(std::io::Error::other)?;
 			backup::apply_pending(&commands::backup::paths(app.handle()).map_err(std::io::Error::other)?)?;
 			log::info!("Welcome to Slime2!");
 			log::info!(
@@ -264,6 +266,11 @@ async fn main() {
 			commands::install_custom_widget,
 			commands::install_default_widget,
 			commands::extract_widget_details,
+			commands::widget_update::prepare_widget_update,
+			commands::widget_update::commit_widget_update,
+			commands::widget_update::discard_widget_update,
+			commands::widget_update::get_widget_update_status,
+			commands::widget_update::restore_widget_update,
 			commands::load_json,
 			commands::save_json,
 			commands::save_json_atomic,

@@ -3,12 +3,14 @@ import { sendWebsocketMessage } from './commands';
 import type { WidgetSetting, WidgetSettings } from './json/widgetSettings';
 import { DEFAULT_VOLUME, type WidgetValues } from './json/widgetValues';
 import { getWidgetMediaSrc } from './media';
+import { isWidgetUpdating } from './widgetUpdateState';
 
 export async function sendWidgetValues(
 	widgetId: string,
 	settings: WidgetSettings,
 	values: WidgetValues,
 ) {
+	if (isWidgetUpdating(widgetId)) return;
 	return sendWidgetMessage(
 		widgetId,
 		'widget-values',

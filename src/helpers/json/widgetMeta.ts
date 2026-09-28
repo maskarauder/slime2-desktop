@@ -4,7 +4,7 @@ import { z } from 'zod/mini';
 import { loadJson } from '../commands';
 import logZodError from '../zodError';
 import { tileFolderPath } from './jsonPaths';
-import { queueSaveJson } from './queueSaveJson';
+import { queueSaveJsonAfterPath } from './queueSaveJson';
 
 export async function loadWidgetMeta(id: string): Promise<WidgetMeta> {
 	const path = await widgetMetaPath(id);
@@ -22,7 +22,7 @@ export async function saveWidgetMeta(
 	id: string,
 	data: WidgetMeta,
 ): Promise<void> {
-	queueSaveJson(data, await widgetMetaPath(id));
+	await queueSaveJsonAfterPath(data, widgetMetaPath(id));
 }
 
 export function getWidgetMetaServices(widgetMeta: WidgetMeta) {
@@ -58,6 +58,7 @@ export const WidgetMetaSchema = z.object({
 	accounts: z.catch(
 		z.array(
 			z.object({
+				id: z.optional(z.string()),
 				type: z.literal(['read', 'bot', 'mod']),
 				service: z.literal(['twitch', 'youtube', 'tiktok']),
 			}),

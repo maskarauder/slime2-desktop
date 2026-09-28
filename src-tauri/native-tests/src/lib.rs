@@ -16,3 +16,6 @@ mod tiktok_lookup;
 mod tls;
 #[path = "../../src/updater_policy.rs"]
 mod updater_policy;
+
+#[path = "../../src/widget_update.rs"]
+mod widget_update;

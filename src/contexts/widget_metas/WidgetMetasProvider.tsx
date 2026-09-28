@@ -1,4 +1,6 @@
 import { loadWidgetMeta } from '@/helpers/json/widgetMeta';
+import type { AppliedWidgetUpdate } from '@/helpers/widgetUpdater';
+import { widgetUpdateGeneration } from '@/helpers/widgetUpdateState';
 import { useCallback, useEffect, useReducer } from 'react';
 import useTileLocations from '../tile_locations/useTileLocations';
 import { WidgetMetasContext } from './useWidgetMetas';
@@ -13,7 +15,9 @@ export default function WidgetMetasProvider({ children }: Props.WithChildren) {
 
 	const getWidgetMeta = useCallback(
 		async (id: string) => {
+			const generation = widgetUpdateGeneration(id);
 			const meta = await loadWidgetMeta(id);
+			if (widgetUpdateGeneration(id) !== generation) return;
 			dispatch({ type: 'set', id, meta });
 		},
 		[dispatch],
@@ -40,6 +44,15 @@ export default function WidgetMetasProvider({ children }: Props.WithChildren) {
 
 	useEffect(() => {
 		// remove widgetMeta if widget is deleted
+		function updated(event: CustomEventInit<AppliedWidgetUpdate>) {
+			for (const widget of event.detail?.widgets ?? [])
+				dispatch({
+					type: 'hydrate',
+					id: widget.widgetId,
+					meta: widget.meta,
+				});
+		}
+		addEventListener('widget-update-applied', updated);
 		function widgetDeleteListener(
 			event: CustomEventInit<{ widgetId: string }>,
 		) {
@@ -50,6 +63,7 @@ export default function WidgetMetasProvider({ children }: Props.WithChildren) {
 		addEventListener('widget-delete', widgetDeleteListener);
 
 		return () => {
+			removeEventListener('widget-update-applied', updated);
 			removeEventListener('widget-delete', widgetDeleteListener);
 		};
 	}, [dispatch]);

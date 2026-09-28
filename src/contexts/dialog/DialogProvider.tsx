@@ -1,7 +1,11 @@
 import Dialog from '@/components/dialog/Dialog';
 import { Dialog as AriakitDialog, useDialogStore } from '@ariakit/react';
 import clsx from 'clsx';
-import { useState } from 'react';
+import { useState, useSyncExternalStore } from 'react';
+import {
+	anyWidgetUpdating,
+	subscribeWidgetUpdates,
+} from '@/helpers/widgetUpdateState';
 import { useSettings } from '../settings/useSettings';
 import { DialogContext } from './useDialog';
 
@@ -12,8 +16,13 @@ export default function DialogProvider({ children }: Props.WithChildren) {
 	const [title, setTitle] = useState<string>('Missing Title!');
 	const { settings } = useSettings();
 	const dialogStore = useDialogStore();
+	const updatingWidget = useSyncExternalStore(
+		subscribeWidgetUpdates,
+		anyWidgetUpdating,
+	);
 
 	function closeDialog() {
+		if (anyWidgetUpdating()) return;
 		setComponent(null);
 		setOnCancel(undefined);
 		setOnBack(undefined);
@@ -25,6 +34,7 @@ export default function DialogProvider({ children }: Props.WithChildren) {
 		component: React.ReactNode,
 		onCancel?: VoidFunction,
 	) {
+		if (anyWidgetUpdating()) return;
 		setTitle(title);
 		closeDialog();
 		setComponent(component);
@@ -51,6 +61,8 @@ export default function DialogProvider({ children }: Props.WithChildren) {
 
 			<AriakitDialog
 				store={dialogStore}
+				hideOnEscape={!updatingWidget}
+				hideOnInteractOutside={!updatingWidget}
 				className={clsx(
 					'fixed inset-0 z-100 flex items-center justify-center bg-transparent',
 					settings.disableAnimations && 'disable-animations',

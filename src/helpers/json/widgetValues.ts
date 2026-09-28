@@ -6,7 +6,8 @@ import {
 } from '../media';
 import logZodError from '../zodError';
 import { tileFolderPath } from './jsonPaths';
-import { queueSaveJson } from './queueSaveJson';
+import { queueSaveJsonAfterPath } from './queueSaveJson';
+import { isWidgetUpdating } from '../widgetUpdateState';
 
 // consts
 
@@ -81,11 +82,12 @@ export async function loadWidgetValues(id: string): Promise<WidgetValues> {
 	}
 }
 
-export async function saveWidgetValues(
+export function saveWidgetValues(
 	id: string,
 	values: WidgetValues,
 ): Promise<void> {
-	queueSaveJson(values, await widgetValuesPath(id));
+	if (isWidgetUpdating(id)) return Promise.resolve();
+	return queueSaveJsonAfterPath(values, widgetValuesPath(id));
 }
 
 async function widgetValuesPath(id: string) {

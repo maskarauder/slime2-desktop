@@ -9,7 +9,12 @@ import youtubeApi from '@/helpers/services/youtube/youtubeApi';
 import { YouTubeReauthorizationError } from '@/helpers/services/youtube/youtubeAuth';
 import { getYouTubeErrorDetails } from '@/helpers/services/youtube/youtubeError';
 import axios from 'axios';
-import { useEffect, useReducer } from 'react';
+import type { AppliedWidgetUpdate } from '@/helpers/widgetUpdater';
+import {
+	replaceWidgetAccountSlots,
+	type WidgetAccountSlots,
+} from '@/helpers/widgetAccountMigration';
+import { useEffect, useReducer, useRef } from 'react';
 import { AccountsContext } from './useAccounts';
 import {
 	AccountsDispatchContext,
@@ -18,6 +23,7 @@ import {
 
 export default function AccountsProvider({ children }: Props.WithChildren) {
 	const [accounts, dispatch] = useReducer(accountsReducer, {});
+	const appliedSlots = useRef<WidgetAccountSlots>({});
 
 	function setAccounts(accounts: Accounts) {
 		dispatch({ type: 'set', accounts });
@@ -28,9 +34,25 @@ export default function AccountsProvider({ children }: Props.WithChildren) {
 	}
 
 	useEffect(() => {
+		function updated(event: CustomEventInit<AppliedWidgetUpdate>) {
+			if (event.detail) {
+				Object.assign(appliedSlots.current, event.detail.accountSlots);
+				dispatch({
+					type: 'widget-update-slots',
+					slots: event.detail.accountSlots,
+				});
+			}
+		}
+		addEventListener('widget-update-applied', updated);
+		return () => removeEventListener('widget-update-applied', updated);
+	}, []);
+
+	useEffect(() => {
 		async function getAccounts() {
 			const accounts = await loadAccounts();
-			setAccounts(accounts);
+			setAccounts(
+				replaceWidgetAccountSlots(accounts, appliedSlots.current),
+			);
 		}
 
 		getAccounts();

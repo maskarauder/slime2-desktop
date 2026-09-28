@@ -7,6 +7,8 @@ See [DESKTOP-TOOLS.md](DESKTOP-TOOLS.md) for connection status, diagnostics,
 backup/restore, shared account editing, simulation and update checks.
 See [AUTOMATIC-UPDATES.md](AUTOMATIC-UPDATES.md) for optional signed installation,
 the one-time release signing setup and installer/relaunch validation.
+See [WIDGET-UPDATES.md](WIDGET-UPDATES.md) for in-place widget ZIP updates,
+per-layout rollback, and declarative settings migrations.
 
 ## Setup and verification
 

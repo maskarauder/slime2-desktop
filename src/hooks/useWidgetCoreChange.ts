@@ -1,4 +1,5 @@
 import { sendWidgetCoreChange } from '@/helpers/widgetMessage';
+import { isWidgetUpdating } from '@/helpers/widgetUpdateState';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { useEffect, useRef } from 'react';
 
@@ -10,6 +11,7 @@ export default function useWidgetCoreChange() {
 			'widget-core-watch',
 			event => {
 				const widgetId = event.payload;
+				if (isWidgetUpdating(widgetId)) return;
 				const timeNow = Date.now();
 				const timeSinceLastCoreChange =
 					timeNow - (lastCoreChangeTimesRef.current.get(widgetId) ?? 0);

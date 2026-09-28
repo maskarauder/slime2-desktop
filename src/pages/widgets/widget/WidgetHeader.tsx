@@ -17,6 +17,7 @@ import CopyPasteWidgetDataDialog from '@@/dialog/CopyPasteWidgetDataDialog';
 import ExportZipDialog from '@@/dialog/ExportZipDialog';
 import GenericDeleteDialog from '@@/dialog/GenericDeleteDialog';
 import OverlayURLDialog from '@@/dialog/OverlayURLDialog';
+import UpdateWidgetDialog from '@@/dialog/UpdateWidgetDialog';
 import { loadWidgetMeta } from '@@/json/widgetMeta';
 import ArrowLeftRightSvg from '@@/svg/ArrowLeftRightSvg';
 import ArrowsCirclingSvg from '@@/svg/ArrowsCirclingSvg';
@@ -54,6 +55,7 @@ export default function WidgetHeader() {
 		>
 			<DevToolsButton />
 			<EditButton />
+			<UpdateButton />
 			<ImportExportButton />
 			<OverlayUrlButton />
 		</TileHeader>
@@ -185,6 +187,25 @@ function EditButton() {
 			className='border-cyan-300 bg-cyan-300 from-cyan-300 to-sky-400 text-sky-900 over:outline-cyan-600'
 			onClick={() => {
 				editTile(widgetId, 'widget');
+			}}
+		/>
+	);
+}
+
+function UpdateButton() {
+	const widgetId = useWidgetId();
+	const { openDialog } = useDialog();
+
+	return (
+		<HeaderButton
+			label='Update'
+			icon={ArrowsCirclingSvg}
+			className='border-violet-300 bg-violet-300 from-violet-300 to-purple-400 text-purple-900 over:outline-violet-600'
+			onClick={() => {
+				openDialog(
+					'Update Widget from ZIP',
+					<UpdateWidgetDialog widgetId={widgetId} />,
+				);
 			}}
 		/>
 	);

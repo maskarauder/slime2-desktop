@@ -6,8 +6,13 @@ import {
 } from '@/helpers/json/accounts';
 import { createContext, useContext } from 'react';
 import { contextErrorMessage } from '../common';
+import {
+	replaceWidgetAccountSlots,
+	type WidgetAccountSlots,
+} from '@/helpers/widgetAccountMigration';
 
 type AccountsAction =
+	| { type: 'widget-update-slots'; slots: WidgetAccountSlots }
 	| {
 			type: 'add';
 			account: Account;
@@ -102,12 +107,21 @@ export function accountsReducer(
 	const newState = structuredClone(state);
 
 	switch (action.type) {
+		case 'widget-update-slots': {
+			// Native update already saved these assignments. Keep newer profile data.
+			return replaceWidgetAccountSlots(state, action.slots);
+		}
 		case 'set': {
 			return action.accounts;
 		}
 		case 'add': {
 			// deep copy data
 			const newAccount: Account = structuredClone(action.account);
+			// Delayed profile/auth responses may carry pre-upgrade slot indices.
+			if (state[newAccount.id])
+				newAccount.widgets = structuredClone(
+					state[newAccount.id]!.widgets,
+				);
 
 			// set/update new account value
 			newState[newAccount.id] = newAccount;

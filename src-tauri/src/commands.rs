@@ -5,6 +5,7 @@ pub mod backup;
 pub mod credentials;
 pub mod diagnostics;
 pub mod tiktok;
+pub mod widget_update;
 pub mod youtube_oauth;
 
 use crate::{file, get_log_file_name, server};

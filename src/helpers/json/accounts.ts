@@ -9,7 +9,7 @@ import {
 } from '../commands';
 import logZodError from '../zodError';
 import { mainConfigPath } from './jsonPaths';
-import { queueSaveJson } from './queueSaveJson';
+import { queueSaveJsonAfterPath } from './queueSaveJson';
 
 export async function loadAccounts(): Promise<Accounts> {
 	const path = await accountsPath();
@@ -26,7 +26,7 @@ export async function loadAccounts(): Promise<Accounts> {
 }
 
 export async function saveAccounts(accounts: Accounts): Promise<void> {
-	queueSaveJson(accounts, await accountsPath());
+	await queueSaveJsonAfterPath(accounts, accountsPath());
 }
 
 export async function getTokens(accountId: string): Promise<Tokens> {

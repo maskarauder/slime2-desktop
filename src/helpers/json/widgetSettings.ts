@@ -10,7 +10,7 @@ import { tileFolderPath } from './jsonPaths';
 export async function loadWidgetSettings(id: string): Promise<WidgetSettings> {
 	const json = await loadJson(await widgetSettingsPath(id));
 	try {
-		const data = WidgetSettings.parse(json);
+		const data = WidgetSettingsSchema.parse(json);
 		return data;
 	} catch (error) {
 		logZodError(error, json);
@@ -406,8 +406,8 @@ const CategorySetting = z.object({
 });
 type CategorySetting = z.infer<typeof CategorySetting>;
 
-const WidgetSettings = z.record(z.string(), CategorySetting);
-export type WidgetSettings = z.infer<typeof WidgetSettings>;
+export const WidgetSettingsSchema = z.record(z.string(), CategorySetting);
+export type WidgetSettings = z.infer<typeof WidgetSettingsSchema>;
 
 type ExtractSettingType<T extends NonCategorySetting['type']> = Extract<
 	NonCategorySetting,

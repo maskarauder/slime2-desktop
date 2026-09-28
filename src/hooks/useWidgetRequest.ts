@@ -1,4 +1,8 @@
 import { resolveWidgetAccounts } from '@/helpers/accountRouting';
+import {
+	isWidgetUpdating,
+	widgetUpdateGeneration,
+} from '@/helpers/widgetUpdateState';
 import { loadWidgetMeta } from '@/helpers/json/widgetMeta';
 import useAccounts from '@/contexts/accounts/useAccounts';
 import { useBotsLogDispatch } from '@/contexts/bot_logs/useBotLogsDispatch';
@@ -398,6 +402,11 @@ export default function useWidgetRequest() {
 						break;
 					}
 					case 'post-slime2-values': {
+						const generation = widgetUpdateGeneration(widget_id);
+						if (isWidgetUpdating(widget_id))
+							throw new Error(
+								'Widget update in progress. Retry after the widget reloads.',
+							);
 						const sentValues = request.payload;
 
 						// load settings and values from json
@@ -405,6 +414,13 @@ export default function useWidgetRequest() {
 							loadWidgetSettings(widget_id),
 							loadWidgetValues(widget_id),
 						]);
+						if (
+							isWidgetUpdating(widget_id) ||
+							widgetUpdateGeneration(widget_id) !== generation
+						)
+							throw new Error(
+								'Widget changed while saving settings. Retry after it reloads.',
+							);
 						const newValues: WidgetValues = {
 							...structuredClone(values),
 							...structuredClone(sentValues),
@@ -415,6 +431,13 @@ export default function useWidgetRequest() {
 							sendWidgetValues(widget_id, settings, newValues),
 							saveWidgetValues(widget_id, newValues),
 						]);
+						if (
+							isWidgetUpdating(widget_id) ||
+							widgetUpdateGeneration(widget_id) !== generation
+						)
+							throw new Error(
+								'Widget changed while saving settings. Retry after it reloads.',
+							);
 
 						// send to widget values provider
 						dispatchEvent(

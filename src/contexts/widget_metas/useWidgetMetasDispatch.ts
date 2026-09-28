@@ -5,7 +5,7 @@ import type { WidgetMetas } from './useWidgetMetas';
 
 type WidgetMetasAction =
 	| {
-			type: 'set';
+			type: 'set' | 'hydrate';
 			id: string;
 			meta: WidgetMeta;
 	  }
@@ -44,6 +44,7 @@ export function widgetMetasReducer(
 	const newState = structuredClone(state);
 
 	switch (action.type) {
+		case 'hydrate':
 		case 'set': {
 			const { id, meta } = action;
 
@@ -52,7 +53,7 @@ export function widgetMetasReducer(
 
 			// add new widget meta
 			newState[id] = newMeta;
-			saveWidgetMeta(id, newMeta);
+			if (action.type === 'set') saveWidgetMeta(id, newMeta);
 			break;
 		}
 
