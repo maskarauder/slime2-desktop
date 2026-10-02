@@ -29,7 +29,7 @@ export default function WidgetBotLogs({ onBack }: WidgetBotLogsProps) {
 	const widgetId = useWidgetId();
 	const { botLog, clearLog } = useBotLog(widgetId);
 	const [lastClicked, setLastClicked] = useState<string | null>(null);
-	const logReverse = structuredClone(botLog).reverse();
+	const logReverse = [...botLog].reverse();
 
 	// automatically scroll to bottom upon opening bot logs
 	useEffect(() => {

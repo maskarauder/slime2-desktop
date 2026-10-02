@@ -2,6 +2,8 @@ import { nanoid } from 'nanoid';
 import { createContext, useContext } from 'react';
 import { contextErrorMessage } from '../common';
 
+const MAX_BOT_LOG_ENTRIES = 500;
+
 export function useBotsLogDispatch() {
 	const dispatch = useContext(BotLogsDispatchContext);
 
@@ -31,7 +33,7 @@ export const BotLogsDispatchContext = createContext<
 >(undefined);
 
 export function botLogsReducer(state: BotLogs, action: BotLogsAction): BotLogs {
-	const newState = structuredClone(state);
+	const newState = { ...state };
 
 	switch (action.type) {
 		case 'add': {
@@ -39,12 +41,12 @@ export function botLogsReducer(state: BotLogs, action: BotLogsAction): BotLogs {
 			const date = new Date();
 
 			newState[widgetId] = [
-				...(newState[widgetId] || []),
+				...(state[widgetId] || []).slice(-(MAX_BOT_LOG_ENTRIES - 1)),
 				{
 					id: `${nanoid()}_${date.getTime()}`,
 					date,
 					level,
-					data,
+					data: structuredClone(data),
 				},
 			];
 			break;

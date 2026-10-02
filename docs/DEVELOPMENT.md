@@ -103,6 +103,15 @@ widget WebSocket has its own heartbeat and bounded outgoing queues; it is separa
 from the upstream platform connection. Pending widget requests are rejected on
 disconnect, and registration completes before new requests are released.
 
+Desktop retains the newest 1,000 activity entries per account and 500 bot/error
+log entries per widget, evicting the oldest entries as new ones arrive. Activity
+JSON saves contain the same bounded history. Reducers copy only the changed
+history array and snapshot incoming payloads; displaying bot logs does not clone
+their payloads. These are entry-count limits, not byte limits. Twitch follower
+dates (including non-followers) stay cached for five minutes; lookups remove all
+expired entries, and the cache holds at most 2,000 account/user pairs, evicting
+the oldest stored entries first. No background cleanup timer is required.
+
 YouTube prefers `streamList` gRPC. Its established stream has no chat-inactivity
 timeout. After three transport failures (or an unsupported endpoint), the reader
 uses REST for ten minutes, with at least 30 seconds between polls and any longer
