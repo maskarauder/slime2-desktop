@@ -6,6 +6,8 @@ import {
 import { createContext, useContext } from 'react';
 import { contextErrorMessage } from '../common';
 
+const MAX_EVENTS_LOG_ENTRIES = 1000;
+
 export function useEventsLogDispatch() {
 	const dispatch = useContext(EventsLogDispatchContext);
 
@@ -30,14 +32,16 @@ export function eventsLogReducer(
 	state: Record<string, EventsLog>,
 	action: EventsLogAction,
 ): Record<string, EventsLog> {
-	const newState = structuredClone(state);
+	const newState = { ...state };
 
 	switch (action.type) {
 		case 'set': {
 			const { id, log } = action;
 
 			// deep copy new data
-			const newLog: EventsLog = structuredClone(log);
+			const newLog: EventsLog = structuredClone(
+				log.slice(-MAX_EVENTS_LOG_ENTRIES),
+			);
 
 			// set new events log
 			newState[id] = newLog;
@@ -50,14 +54,12 @@ export function eventsLogReducer(
 			// deep copy new data
 			const newEvent: LoggedEvent = structuredClone(event);
 
-			// shouldn't happen but just in case
-			if (!newState[id]) {
-				newState[id] = [];
-			}
-
-			// add new log
-			newState[id].push(newEvent);
-			saveEventsLog(id, structuredClone(newState[id]));
+			// Keep recent history without cloning unrelated accounts or old payloads.
+			newState[id] = [
+				...(state[id] || []).slice(-(MAX_EVENTS_LOG_ENTRIES - 1)),
+				newEvent,
+			];
+			saveEventsLog(id, newState[id]);
 			break;
 		}
 	}
