@@ -70,7 +70,7 @@ recovery journal is persisted before each rename. Failed batches are rolled back
 including layouts already changed; startup recovery also rolls back unfinished
 swaps after an interrupted process. This does not guarantee atomic recovery from
 hardware failure or power loss. If rollback itself fails, the app retains recovery
-files and asks you to restart Slime2; keep those files until recovery succeeds.
+files and asks you to restart Slippy2 Desktop; keep those files until recovery succeeds.
 
 ## Authoring settings migrations
 

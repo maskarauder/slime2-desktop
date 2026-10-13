@@ -110,7 +110,7 @@ and a `values` object. Writes use a flushed temporary file in the same
 directory followed by replacement, and are acknowledged only after the save
 finishes. Save failures preserve the previous in-memory value. A malformed
 existing file is reported as an error, never silently replaced with an empty
-database. Back up this directory while Slime2 is closed; direct edits while
+database. Back up this directory while Slippy2 Desktop is closed; direct edits while
 the app is running are not observed.
 
 Keys and operation IDs are limited to 240 characters, values to 64 KiB, JSON

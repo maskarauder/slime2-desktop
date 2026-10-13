@@ -150,6 +150,27 @@ test('update readiness requires an uploaded nonempty latest.json on the selected
 	}
 });
 
+test('the existing update feed accepts renamed Slippy2 Desktop installers', async () => {
+	const api = updater(async () =>
+		response([
+			release('v1.6.2', {
+				assets: [
+					{
+						name: 'Slippy2-Desktop-v1.6.2_Windows-X64.msi',
+						state: 'uploaded',
+						size: 100,
+					},
+					{ name: 'latest.json', state: 'uploaded', size: 100 },
+				],
+			}),
+		]),
+	);
+	const result = await api.checkForUpdate('1.6.1', 'stable');
+	assert.equal(result.newer, true);
+	assert.equal(api.getAvailableUpdate().tag, 'v1.6.2');
+	assert.equal(api.getAvailableUpdate().hasManifest, true);
+});
+
 test('a late check cannot overwrite the result from a newer channel check', async () => {
 	const first = deferred(),
 		second = deferred();

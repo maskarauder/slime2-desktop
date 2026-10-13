@@ -88,7 +88,7 @@ export default function YouTubeAuthPage() {
 
 			if (!refresh_token) {
 				throw new Error(
-					'Google did not return a refresh token. Revoke the existing Slime2 grant and try again.',
+					'Google did not return a refresh token. Revoke the existing grant for your configured OAuth client and try again.',
 				);
 			}
 

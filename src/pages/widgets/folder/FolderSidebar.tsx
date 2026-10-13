@@ -1,4 +1,4 @@
-import slime2tv from '@/assets/slime2tv.png';
+import { APP_NAME } from '@/helpers/branding';
 import WaveSvg from '@/components/svg/WaveSvg';
 import AccountServiceTag from '@/components/tag/AccountServiceTag';
 import Tag from '@/components/tag/Tag';
@@ -73,9 +73,11 @@ function SelectedTilePreview({ tile, tileMeta }: SelectedTilePreviewProps) {
 	if (!tile) {
 		return (
 			<div className='flex flex-1 flex-col items-center gap-2 font-bold text-white text-shadow-[0_2px_black]'>
-				<h1 className='font-mochiy text-6'>Welcome to Slime2!</h1>
-				<img className='h-48' src={slime2tv}></img>
-				<p>Select a slime tile to get started</p>
+				<h1 className='text-center font-mochiy text-5'>
+					Welcome to {APP_NAME}!
+				</h1>
+				<img className='h-40' src='/slippy2-mark.svg' alt='' />
+				<p>Select a tile to get started</p>
 			</div>
 		);
 	}
@@ -90,7 +92,7 @@ function SelectedTilePreview({ tile, tileMeta }: SelectedTilePreviewProps) {
 				) : (
 					<>
 						<h2 className='font-mochiy text-6'>Click to create!</h2>
-						<img className='h-48' src={slime2tv}></img>
+						<img className='h-40' src='/slippy2-mark.svg' alt='' />
 
 						<div className='flex flex-1 items-end'>
 							<em className='text-3.5 font-bold text-white text-shadow-[0_2px_black]'>

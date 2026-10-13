@@ -56,7 +56,7 @@ pub async fn register(
 		.state::<crate::server::access::WidgetAccess>()
 		.authorize(app, &data.id, &data.token)
 	{
-		return Err("Widget authentication failed. Copy its current Overlay URL from Slime2.".into());
+		return Err("Widget authentication failed. Copy its current Overlay URL from Slippy2 Desktop.".into());
 	}
 	let json = crate::file::load_json(
 		crate::file::tiles_path(app)

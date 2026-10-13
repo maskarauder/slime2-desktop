@@ -96,7 +96,7 @@ async fn main() {
 		// tauri_plugin_single_instance MUST be the first plugin to work
 		.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
 			// https://v2.tauri.app/plugin/single-instance/#focusing-on-new-instance
-			// window label is "main", while the title is "Slime2"
+			// window label is "main", while the title is "Slippy2 Desktop"
 			if let Some(window) = app.get_webview_window("main") {
 				if let Err(error) = window.set_focus() {
 					eprintln!("Failed to focus main window! {}", error);
@@ -189,7 +189,7 @@ async fn main() {
 		.setup(|app: &mut tauri::App| {
 			commands::widget_update::recover_pending(app.handle()).map_err(std::io::Error::other)?;
 			backup::apply_pending(&commands::backup::paths(app.handle()).map_err(std::io::Error::other)?)?;
-			log::info!("Welcome to Slime2!");
+			log::info!("Welcome to Slippy2 Desktop!");
 			log::info!(
 				"Build: version={} commit={} source={} target={} profile={}",
 				app.package_info().version,
@@ -204,7 +204,7 @@ async fn main() {
 			for _obs_browser_process in system_info.processes_by_name("obs-browser".as_ref()) {
 				app
 					.dialog()
-					.message("Slime2 has detected that OBS Browser Sources are already running.\nBrowser sources with Slime2 overlays will not work until you refresh them or restart OBS.\n\nIf you use the Autostarter plugin for OBS, you can set that up to automatically launch Slime2 when you launch OBS. To ensure that Slime2 opens before the browser sources load, you will need to disable \"Ask on launch\" in the Autostarter settings.")
+					.message("Slippy2 Desktop has detected that OBS Browser Sources are already running.\nBrowser sources with Slippy2 Desktop overlays will not work until you refresh them or restart OBS.\n\nIf you use the Autostarter plugin for OBS, you can set that up to automatically launch Slippy2 Desktop when you launch OBS. To ensure that Slippy2 Desktop opens before the browser sources load, you will need to disable \"Ask on launch\" in the Autostarter settings.")
 					.title("Warning: OBS Browser Detected")
 					.buttons(tauri_plugin_dialog::MessageDialogButtons::Ok)
 					.kind(tauri_plugin_dialog::MessageDialogKind::Warning)

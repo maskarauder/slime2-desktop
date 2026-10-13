@@ -130,7 +130,7 @@ export default function useWidgetRequest() {
 
 					if (!account) {
 						throw new Error(
-							`Slime2 account with ID ${accountId} not found!`,
+							`Slippy2 Desktop account with ID ${accountId} not found!`,
 						);
 					}
 

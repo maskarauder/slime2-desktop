@@ -1,3 +1,4 @@
+import { APP_NAME } from '@/helpers/branding';
 import HeaderButton from '@/components/header/HeaderButton';
 import ToggleField from '@/components/input_fields/ToggleField';
 import GearSvg from '@/components/svg/GearSvg';
@@ -29,7 +30,7 @@ export default function SettingsPanel() {
 
 					{appVersionQuery.data && (
 						<p className='self-end font-bold'>
-							Slime2 v{appVersionQuery.data}
+							{APP_NAME} v{appVersionQuery.data}
 						</p>
 					)}
 

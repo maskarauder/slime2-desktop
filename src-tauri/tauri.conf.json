@@ -8,13 +8,23 @@
 	"bundle": {
 		"active": true,
 		"resources": {
+			"../LICENSE": "LICENSE",
+			"../COPYING": "COPYING",
+			"../NOTICE.md": "NOTICE.md",
 			"../resources/overlay_server": "overlay_server/",
 			"../resources/widgets": "widgets/",
 			"../resources/assets": "assets/"
 		},
 		"category": "utility",
-		"shortDescription": "Local Stream Widget Manager",
-		"longDescription": "Manage and customize local stream widgets!",
+		"shortDescription": "Slippy2 Desktop: an independent Slime2 fork",
+		"longDescription": "Manage local stream widgets with an independent fork maintained by Maskarauder. Not affiliated with, supported by, or endorsed by the upstream Slime2 project.",
+		"homepage": "https://github.com/maskarauder/slime2-desktop",
+		"publisher": "Maskarauder",
+		"windows": {
+			"wix": {
+				"upgradeCode": "f8922db7-c2f9-5ee4-9fa1-206acc0a85bf"
+			}
+		},
 		"icon": [
 			"icons/32x32.png",
 			"icons/128x128.png",
@@ -24,12 +34,21 @@
 		],
 		"targets": ["appimage", "deb", "rpm", "msi", "app", "dmg"],
 		"linux": {
+			"deb": {
+				"provides": ["slime2"],
+				"replaces": ["slime2"],
+				"conflicts": ["slime2"]
+			},
+			"rpm": {
+				"provides": ["slime2"],
+				"obsoletes": ["slime2"]
+			},
 			"appimage": {
 				"bundleMediaFramework": true
 			}
 		}
 	},
-	"productName": "Slime2",
+	"productName": "Slippy2 Desktop",
 	"mainBinaryName": "Slime2",
 	"version": "../package.json",
 	"identifier": "stream.slime2.desktop",
@@ -44,7 +63,7 @@
 	"app": {
 		"windows": [
 			{
-				"title": "Slime2",
+				"title": "Slippy2 Desktop",
 				"width": 1200,
 				"height": 700,
 				"minWidth": 1200,

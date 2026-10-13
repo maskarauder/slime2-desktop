@@ -759,13 +759,13 @@ fn transact(
 	if result.is_err() {
 		if reverse_journal(paths, &mut journal).is_err() {
 			return Err(invalid(
-				"Widget update failed and rollback could not finish. Restart Slime2 to recover the retained widget-updates files before continuing.",
+				"Widget update failed and rollback could not finish. Restart Slippy2 Desktop to recover the retained widget-updates files before continuing.",
 			));
 		}
 	} else if persist_journal(paths, &journal, true).is_err() {
 		if reverse_journal(paths, &mut journal).is_err() {
 			return Err(invalid(
-				"Widget update failed and rollback could not finish. Restart Slime2 to recover the retained widget-updates files before continuing.",
+				"Widget update failed and rollback could not finish. Restart Slippy2 Desktop to recover the retained widget-updates files before continuing.",
 			));
 		}
 		return Err(invalid(

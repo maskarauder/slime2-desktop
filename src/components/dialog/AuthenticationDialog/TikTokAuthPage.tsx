@@ -127,7 +127,7 @@ export default function TikTokAuthPage() {
 				value={username}
 				onChange={setUsername}
 				placeholder='@username'
-				description='The public account whose LIVE chat Slime2 should read.'
+				description='The public account whose LIVE chat Slippy2 Desktop should read.'
 			/>
 
 			<TextField

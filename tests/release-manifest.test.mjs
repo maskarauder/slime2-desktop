@@ -46,7 +46,7 @@ function fixture(versionSuffix = '-test') {
 	const bodies = new Map();
 	for (const [, , suffix] of targets) {
 		const id = assets.length + 100;
-		const name = `Slime2-${tag}_${suffix}`;
+		const name = `Slippy2-Desktop-${tag}_${suffix}`;
 		assets.push({
 			id,
 			name,
@@ -260,14 +260,14 @@ for (const [label, change, message] of [
 		f => {
 			f.assets.splice(4, 1);
 		},
-		/Missing installer for darwin-x86_64-app: expected Slime2-v1\.5\.3-test_macOS-X64\.app\.tar\.gz/,
+		/Missing installer for darwin-x86_64-app: expected Slippy2-Desktop-v1\.5\.3-test_macOS-X64\.app\.tar\.gz/,
 	],
 	[
 		'a missing macOS signature',
 		f => {
 			f.assets.splice(5, 1);
 		},
-		/Missing signature for darwin-x86_64-app: expected Slime2-v1\.5\.3-test_macOS-X64\.app\.tar\.gz\.sig/,
+		/Missing signature for darwin-x86_64-app: expected Slippy2-Desktop-v1\.5\.3-test_macOS-X64\.app\.tar\.gz\.sig/,
 	],
 	[
 		'a duplicate installer',
@@ -332,7 +332,7 @@ for (const [label, change, message] of [
 		f => {
 			f.bodies.set(f.assets[5].id, Buffer.from(signature(8)));
 		},
-		/Signature for darwin-x86_64-app uses a different updater key: Slime2-v1\.5\.3-test_macOS-X64\.app\.tar\.gz\.sig/,
+		/Signature for darwin-x86_64-app uses a different updater key: Slippy2-Desktop-v1\.5\.3-test_macOS-X64\.app\.tar\.gz\.sig/,
 	],
 ])
 	test(`rejects ${label} before changing the draft or its assets`, async () => {

@@ -1,3 +1,4 @@
+import { APP_NAME } from '@/helpers/branding';
 import { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { open, save, confirm } from '@tauri-apps/plugin-dialog';
@@ -30,7 +31,7 @@ export default function DataTools() {
 	async function diagnostics() {
 		const destination = await save({
 			title: 'Export diagnostics',
-			defaultPath: 'slime2-diagnostics.json',
+			defaultPath: 'slippy2-diagnostics.json',
 			filters: [{ name: 'JSON', extensions: ['json'] }],
 		});
 		if (!destination) return;
@@ -43,9 +44,9 @@ export default function DataTools() {
 	}
 	async function backup() {
 		const destination = await save({
-			title: 'Save Slime2 backup',
-			defaultPath: 'slime2-backup.zip',
-			filters: [{ name: 'Slime2 backup', extensions: ['zip'] }],
+			title: `Save ${APP_NAME} backup`,
+			defaultPath: 'slippy2-backup.zip',
+			filters: [{ name: `${APP_NAME} backup`, extensions: ['zip'] }],
 		});
 		if (!destination) return;
 		await flushQueuedSaves();
@@ -56,10 +57,10 @@ export default function DataTools() {
 	}
 	async function restore() {
 		const source = await open({
-			title: 'Restore Slime2 backup',
+			title: `Restore ${APP_NAME} backup`,
 			multiple: false,
 			directory: false,
-			filters: [{ name: 'Slime2 backup', extensions: ['zip'] }],
+			filters: [{ name: `${APP_NAME} backup`, extensions: ['zip'] }],
 		});
 		if (typeof source !== 'string') return;
 		const preview = await invoke<{
@@ -69,7 +70,7 @@ export default function DataTools() {
 			appVersion: string;
 		}>('preview_app_restore', { source });
 		const accepted = await confirm(
-			`Restore ${preview.files} files (${(preview.bytes / 1024 / 1024).toFixed(1)} MiB) from Slime2 ${preview.appVersion}?\n\nThis replaces current widgets, configuration and media, then restarts Slime2. Make a backup first to keep the current setup. You must sign in to restored accounts again. Only restore backups you trust; widgets contain executable scripts.`,
+			`Restore ${preview.files} files (${(preview.bytes / 1024 / 1024).toFixed(1)} MiB) from app version ${preview.appVersion}?\n\nThis replaces current widgets, configuration and media, then restarts ${APP_NAME}. Make a backup first to keep the current setup. You must sign in to restored accounts again. Only restore backups you trust; widgets contain executable scripts.`,
 			{ title: 'Restore and restart?', kind: 'warning' },
 		);
 		if (!accepted) {

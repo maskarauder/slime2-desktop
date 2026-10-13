@@ -1,3 +1,4 @@
+import { PROJECT_URL } from '@/helpers/branding';
 import { getAppVersion } from '@/helpers/appVersion';
 import axios from 'axios';
 
@@ -22,7 +23,7 @@ const pronounDbApi = {
 			>('/lookup', {
 				headers: {
 					// as requested by PronounDB API https://pronoundb.org/wiki/api-docs
-					'X-PronounDB-Source': `Slime2/${appVersion} (https://slime2.stream/)`,
+					'X-PronounDB-Source': `Slippy2-Desktop/${appVersion} (${PROJECT_URL})`,
 				},
 				params: {
 					platform,

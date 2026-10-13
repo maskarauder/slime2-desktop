@@ -262,8 +262,8 @@ function OverlayUrlButton() {
 					openDialog(
 						'Overlay URL',
 						<p>
-							Unable to load the overlay URL. Check Slime2’s log
-							and retry.
+							Unable to load the overlay URL. Check Slippy2
+							Desktop’s log and retry.
 						</p>,
 					);
 				}

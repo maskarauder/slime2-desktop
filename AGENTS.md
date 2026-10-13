@@ -1,4 +1,4 @@
-# Working on Slime2 Desktop
+# Working on Slippy2 Desktop
 
 Read `docs/DEVELOPMENT.md` for architecture, validation and release steps.
 Keep changes scoped to the request and preserve work already in the checkout.
