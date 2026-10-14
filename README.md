@@ -1,5 +1,3 @@
-<img src="public/slippy2-mark.svg" width="96" height="96" alt="Slippy2 Desktop icon">
-
 # Slippy2 Desktop
 
 **An independent fork maintained by Maskarauder. Not affiliated with, supported

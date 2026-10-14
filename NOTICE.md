@@ -47,10 +47,11 @@ those license files.
 - **Original Slime2 icons and artwork:** Anje,
   [shenanjegans](https://ko-fi.com/shenanjegans).
 
-The fork's cyan S2 chat-bubble mark distinguishes its app identity from the
-original Slime2 logo. Original artwork still included in built-in widgets and
-other inherited resources retains the credits above. Attribution does not imply
-that the original contributors participate in or endorse this fork.
+The app and browser icons use a generic grid placeholder copied from the
+existing `src/components/svg/GridSvg.tsx` icon. This branding change adds no
+AI-generated artwork or custom logo. Original artwork still included in built-in
+widgets and other inherited resources retains the credits above. Attribution
+does not imply that the original contributors participate in or endorse this fork.
 
 The fork-identification and branding changes were made on October 13, 2026.
 Other changes and their dates are recorded in this repository's Git history.

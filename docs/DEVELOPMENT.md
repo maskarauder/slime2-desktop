@@ -58,11 +58,19 @@ AI-assisted development disclosure, and original software/art credits. The
 maintainer chose detachment in response to the public README; no private request
 from the upstream author is implied.
 
-The public app name, window titles, About screen, source icon and release assets
-use Slippy2 Desktop. `public/slippy2-mark.svg` is the source for generated native
-icons; the overlay has a matching copy in `src-overlay/public/`. Generated icons
-are excluded from commits. Native bundles include `LICENSE`, `COPYING`, and
-`NOTICE.md` as resources alongside the widgets and overlay host.
+The public app name, window titles, About screen and release assets use
+Slippy2 Desktop. The README and About screen use text instead of a custom logo.
+`public/app-placeholder.svg` reuses the existing `src/components/svg/GridSvg.tsx`
+path for a generic app icon; the overlay has an identical copy in
+`src-overlay/public/`. Tauri converts this placeholder to native icon formats
+during builds. Those build outputs are excluded from commits. Native bundles
+include `LICENSE`, `COPYING`, and `NOTICE.md` as resources alongside the widgets
+and overlay host.
+
+Do not create or add generative-AI artwork, including custom SVG/vector logos.
+Prefer plain text, existing licensed icons, or generic placeholders. Keep the
+source and credits for reused artwork; custom artwork should be supplied by the
+maintainer with its provenance.
 
 These compatibility identifiers deliberately retain their earlier values:
 

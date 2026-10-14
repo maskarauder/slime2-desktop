@@ -76,7 +76,7 @@ function SelectedTilePreview({ tile, tileMeta }: SelectedTilePreviewProps) {
 				<h1 className='text-center font-mochiy text-5'>
 					Welcome to {APP_NAME}!
 				</h1>
-				<img className='h-40' src='/slippy2-mark.svg' alt='' />
+				<GridSvg className='size-40 text-zinc-400' />
 				<p>Select a tile to get started</p>
 			</div>
 		);
@@ -92,7 +92,7 @@ function SelectedTilePreview({ tile, tileMeta }: SelectedTilePreviewProps) {
 				) : (
 					<>
 						<h2 className='font-mochiy text-6'>Click to create!</h2>
-						<img className='h-40' src='/slippy2-mark.svg' alt='' />
+						<GridSvg className='size-40 text-zinc-400' />
 
 						<div className='flex flex-1 items-end'>
 							<em className='text-3.5 font-bold text-white text-shadow-[0_2px_black]'>

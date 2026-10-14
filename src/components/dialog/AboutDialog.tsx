@@ -18,11 +18,6 @@ export default function AboutDialog() {
 		<DialogContent className='flex w-200 max-w-[calc(100vw-2rem)] flex-col gap-4 p-5'>
 			<div className='min-h-0 flex-1 overflow-y-auto pr-1'>
 				<header className='mb-4 flex items-center gap-4'>
-					<img
-						src='/slippy2-mark.svg'
-						alt=''
-						className='size-20 shrink-0'
-					/>
 					<div>
 						<h1 className='font-fredoka text-7 font-medium text-zinc-800'>
 							{APP_NAME}

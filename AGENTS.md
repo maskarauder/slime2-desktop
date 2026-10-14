@@ -34,6 +34,10 @@ the actual commands/results and any platform or live-service checks not run.
 
 ## Boundaries and invariants
 
+- Do not create or add generative-AI artwork, including custom SVG/vector logos.
+  Prefer text labels, existing licensed icons, or generic placeholders. Preserve
+  the source and credits for reused artwork.
+
 - Keep Villager Chat and its commands, artwork, account-mapping policy and data
   schema in its own widget project. Desktop exposes generic shared storage,
   platform lookup and event APIs; it must not import or special-case that widget.
