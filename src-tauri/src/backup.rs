@@ -128,7 +128,7 @@ pub fn create(
 	for root in paths.roots() {
 		if root.exists() && canonical_parent.starts_with(root.canonicalize()?) {
 			return Err(invalid(
-				"Save the backup outside Slime2 configuration, tiles and media.",
+				"Save the backup outside Slippy2 Desktop configuration, tiles and media.",
 			));
 		}
 	}

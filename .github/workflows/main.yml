@@ -84,15 +84,15 @@ jobs:
             if (!release) {
               ({ data: release } = await github.rest.repos.createRelease({
                 owner, repo, tag_name: tag, target_commitish: context.sha,
-                name: `Slime2 ${tag}`, draft: true,
+                name: `Slippy2 Desktop ${tag}`, draft: true,
                 prerelease: process.env.VERSION_SUFFIX !== '',
-                body: 'See the assets to download this version and install. Automatic updates use the signed installers and latest.json.',
+                body: 'Independent Slippy2 Desktop release maintained by Maskarauder, derived from Slime2. Not affiliated with or endorsed by the upstream project. Use this repository for support. See the assets to download and install. Automatic updates use the signed installers and latest.json.',
               }));
             }
             core.setOutput('app_version', version);
             core.setOutput('release_id', release.id);
             core.setOutput('tag', tag);
-            core.setOutput('arch_linux_file_name', `Slime2-v${version}${process.env.VERSION_SUFFIX}_Arch-Linux.zip`);
+            core.setOutput('arch_linux_file_name', `Slippy2-Desktop-v${version}${process.env.VERSION_SUFFIX}_Arch-Linux.zip`);
 
   publish-tauri:
     needs: prepare-release
@@ -173,8 +173,8 @@ jobs:
         with:
           releaseId: ${{ needs.prepare-release.outputs.release_id }}
           tagName: ${{ needs.prepare-release.outputs.tag }}
-          releaseName: 'Slime2 ${{ needs.prepare-release.outputs.tag }}'
-          releaseBody: 'See the assets to download this version and install.'
+          releaseName: 'Slippy2 Desktop ${{ needs.prepare-release.outputs.tag }}'
+          releaseBody: 'Independent Slippy2 Desktop release maintained by Maskarauder, derived from Slime2. Not affiliated with or endorsed by the upstream project. Use this repository for support. See the assets to download and install.'
           releaseDraft: true
           prerelease: ${{ github.ref_name != 'release/live' }}
           # Only release builds require signatures; ordinary local/PR builds do not.
@@ -187,7 +187,7 @@ jobs:
           uploadUpdaterSignatures: true
           updaterJsonPreferNsis: false
           retryAttempts: 3
-          releaseAssetNamePattern: 'Slime2-v[version]${{ env.VERSION_SUFFIX }}_${{ env.FILE_SUFFIX }}[ext]'
+          releaseAssetNamePattern: 'Slippy2-Desktop-v[version]${{ env.VERSION_SUFFIX }}_${{ env.FILE_SUFFIX }}[ext]'
 
   publish-release:
     permissions:

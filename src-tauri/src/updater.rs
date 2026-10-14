@@ -49,7 +49,7 @@ pub struct UpdateState(Arc<tokio::sync::Mutex<Option<PreparedUpdate>>>);
 fn require_main(window: &WebviewWindow) -> Result<(), String> {
 	if window.label() != "main" {
 		return Err(
-			"Only the Slime2 settings window can install updates.".into()
+			"Only the Slippy2 Desktop settings window can install updates.".into()
 		);
 	}
 	Ok(())
@@ -137,7 +137,7 @@ fn updater_error(error: tauri_plugin_updater::Error) -> String {
 
 async fn release_metadata(tag: &str) -> Result<serde_json::Value, String> {
 	let client = reqwest::Client::builder()
-		.user_agent("Slime2-Updater")
+		.user_agent("Slippy2-Desktop-Updater")
 		.connect_timeout(Duration::from_secs(10))
 		.timeout(CHECK_TIMEOUT)
 		.build()
@@ -409,7 +409,7 @@ pub async fn install_prepared_update(
 		Some(prepared.bytes.len() as u64),
 	)?;
 	log::info!(
-		"Installing verified update {} and relaunching Slime2.",
+		"Installing verified update {} and relaunching Slippy2 Desktop.",
 		prepared.update.version
 	);
 	let result = tokio::task::spawn_blocking(move || {

@@ -1,4 +1,4 @@
-# Developing Slime2 Desktop
+# Developing Slippy2 Desktop
 
 All commands below run from the repository root in PowerShell or a Unix shell.
 Paths are relative to the repository unless explicitly labeled as app data.
@@ -49,6 +49,67 @@ the MSI. `.github/workflows/main.yml` runs the same normal verification before
 each platform's release build. A local Linux/macOS result does not replace the
 Windows installer check. OAuth, a real live broadcast and OBS rendering still
 need a manual smoke test; fixtures do not claim to validate live API availability.
+
+## Branding and upgrade compatibility
+
+Slippy2 Desktop is Maskarauder's independent, detached derivative of Slime2
+Desktop. Read [NOTICE.md](../NOTICE.md) for provenance, the upstream policy,
+AI-assisted development disclosure, and original software/art credits. The
+maintainer chose detachment in response to the public README; no private request
+from the upstream author is implied.
+
+The public app name, window titles, About screen and release assets use
+Slippy2 Desktop. The README and About screen use text instead of a custom logo.
+`public/app-placeholder.svg` reuses the existing `src/components/svg/GridSvg.tsx`
+path for a generic app icon; the overlay has an identical copy in
+`src-overlay/public/`. Tauri converts this placeholder to native icon formats
+during builds. Those build outputs are excluded from commits. Native bundles
+include `LICENSE`, `COPYING`, and `NOTICE.md` as resources alongside the widgets
+and overlay host.
+
+Do not create or add generative-AI artwork, including custom SVG/vector logos.
+Prefer plain text, existing licensed icons, or generic placeholders. Keep the
+source and credits for reused artwork; custom artwork should be supplied by the
+maintainer with its provenance.
+
+These compatibility identifiers deliberately retain their earlier values:
+
+| Identifier | Value | Reason |
+| --- | --- | --- |
+| Tauri bundle ID | `stream.slime2.desktop` | Reuse app config/data and bundle identity |
+| Credential service | `slime2.stream` | Read existing OS-stored account credentials |
+| Main executable | `Slime2` | Keep the executable name used by existing launch integrations |
+| MSI upgrade code | `f8922db7-c2f9-5ee4-9fa1-206acc0a85bf` | Recognize prior Windows installs as the same upgrade family |
+| Cargo/npm package and Arch package names | `slime2` (overlay: `slime2-overlay-server`) | Retain build/version tooling and Arch upgrade identity |
+| Widget events, commands, backup formats and resource IDs | Existing `slime2` names | Preserve installed widgets, saved layouts and earlier backups |
+| Source and update repository | `maskarauder/slime2-desktop` | Keep installed updater allowlists and release URLs valid |
+
+Tauri normally derives the MSI upgrade code from UUIDv5 in the DNS namespace
+using `<productName>.exe.app.x64`. The pinned code is the value for the former
+product name, `Slime2`, including for ARM64 MSI builds. Do not regenerate it from
+the new display name. Debian packages declare that they replace/conflict with
+and provide `slime2`; RPM packages obsolete and provide `slime2`, because Tauri
+now derives their package name from `Slippy2 Desktop`. Arch retains `pkgname=slime2`.
+These are upgrades of this existing fork, not separate profiles for side-by-side
+use with the original app.
+
+Future release filenames use `Slippy2-Desktop-v<version>_<platform>.<ext>`. Keep
+the workflow, signed-manifest publisher, its tests, and Arch download URLs in
+sync. Existing updater clients validate the repository, release and installer
+type rather than the old asset-name prefix. Retain the current signing key and
+publish a higher numeric app version for the first branded release. A GitHub
+repository rename needs a separate updater migration; redirects alone do not
+satisfy the installed clients' URL allowlists.
+
+Before publishing the first branded release, install it over a prior release on
+each supported OS. Check that settings, widget layouts, OBS sources, account
+credentials and backup restore still work. On Windows verify there is one
+installed app entry; on Linux check that the package manager replaces the prior
+package without file conflicts. On macOS check both manual replacement of the
+old app bundle and signed automatic updates, including existing Dock/launch
+shortcuts. Installation directories or app-bundle paths may change even though
+the executable name is retained. CI compilation and the offline compatibility
+tests do not replace these installer and live-account checks.
 
 ## Message flow and ownership
 
@@ -205,7 +266,7 @@ their channel suffixes. The script does not update dependencies, commit or tag.
 It validates all inputs first, stages replacements and attempts rollback on a
 failed write; this is not a transaction across the filesystem. Review the diff.
 
-At startup the normal Slime2 log records app version, full Git commit, source
+At startup the normal Slippy2 Desktop log records app version, full Git commit, source
 state (`clean`, `modified` or `unknown`), target and build profile. Git is queried
 at build time by `src-tauri/build_metadata.rs`. A source archive without Git uses
 a valid `GITHUB_SHA` if provided, otherwise `unknown`. This is diagnostic
@@ -213,7 +274,7 @@ provenance, not a signature or proof of source integrity. Normal source edits an
 Git revision changes refresh the metadata on the next build.
 
 `src/hooks/useWidgetRegistration.ts` records each connected widget's tile name, widget ID, widget name and version,
-including when tile/widget names match. These records use the existing Slime2
+including when tile/widget names match. These records use the existing Slippy2 Desktop
 text log through `src/main.tsx` and `src/helpers/safeLog.ts`. Include the startup
 header, relevant connection lines and nearby errors in bug reports. Do not add
 full provider payloads, HTTP headers, credentials or authenticated overlay URLs.

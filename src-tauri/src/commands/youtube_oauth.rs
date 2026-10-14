@@ -234,9 +234,9 @@ async fn write_oauth_response(
 	success: bool,
 ) -> Result<(), String> {
 	let body = if success {
-		"<!doctype html><meta charset=\"utf-8\"><title>Slime2 connected</title><p>YouTube is connected. You can close this tab and return to Slime2.</p>"
+		"<!doctype html><meta charset=\"utf-8\"><title>Slippy2 Desktop connected</title><p>YouTube is connected. You can close this tab and return to Slippy2 Desktop.</p>"
 	} else {
-		"<!doctype html><meta charset=\"utf-8\"><title>Slime2 connection failed</title><p>YouTube could not be connected. Return to Slime2 for details.</p>"
+		"<!doctype html><meta charset=\"utf-8\"><title>Slippy2 Desktop connection failed</title><p>YouTube could not be connected. Return to Slippy2 Desktop for details.</p>"
 	};
 	let response = format!(
 		"HTTP/1.1 {status}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",

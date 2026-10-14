@@ -1,3 +1,4 @@
+import { APP_NAME } from '@/helpers/branding';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useSettings } from '@/contexts/settings/useSettings';
 import useAppVersionQuery from '@/hooks/useAppVersionQuery';
@@ -53,7 +54,7 @@ export default function UpdateNotice() {
 		return null;
 	return (
 		<aside
-			aria-label='Slime2 updates'
+			aria-label={`${APP_NAME} updates`}
 			className='flex items-center justify-between gap-3 bg-lime-100 px-5 py-2 text-zinc-900'
 		>
 			<div role='status'>
@@ -62,7 +63,7 @@ export default function UpdateNotice() {
 					(installation.phase === 'error' &&
 						installation.tag === visibleUpdate?.tag)
 						? installation.message
-						: `Slime2 ${visibleUpdate?.tag} is available.`}
+						: `${APP_NAME} ${visibleUpdate?.tag} is available.`}
 				</p>
 				{!busy &&
 					visibleUpdate &&

@@ -131,7 +131,7 @@ export async function publishSignedRelease({
 		platforms: {},
 	};
 	for (const [target, alias, suffix] of targets) {
-		const name = `Slime2-${tag}_${suffix}`;
+		const name = `Slippy2-Desktop-${tag}_${suffix}`;
 		const installer = requireAsset(assets, name, target);
 		const signatureAsset = requireAsset(
 			assets,

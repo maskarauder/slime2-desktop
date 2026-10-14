@@ -1,7 +1,7 @@
 {
 	"name": "slime2",
 	"version": "1.6.1",
-	"description": "Local Stream Widget Manager",
+	"description": "Slippy2 Desktop, an independent Slime2 fork maintained by Maskarauder",
 	"private": true,
 	"type": "module",
 	"scripts": {
@@ -10,7 +10,7 @@
 		"build": "tauri build",
 		"build:debug": "tauri build --debug",
 		"tauri": "tauri",
-		"icon": "npm run tauri icon",
+		"icon": "npm run tauri icon -- public/app-placeholder.svg",
 		"before:dev": "npm run overlay:build && npm run icon && vite",
 		"before:build": "npm run overlay:build && npm run icon && tsc && vite build",
 		"overlay:install": "npm --prefix ./src-overlay ci",

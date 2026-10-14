@@ -1,6 +1,6 @@
 # Live 7TV emote catalogs
 
-Slime2 owns one shared 7TV EventAPI connection for the Twitch and YouTube read
+Slippy2 Desktop owns one shared 7TV EventAPI connection for the Twitch and YouTube read
 accounts assigned to installed widgets. It loads global and channel emotes,
 listens for additions/removals/renames and active-set changes, and reconciles the
 catalogs every 15 minutes. Multiple layouts do not create separate upstream
@@ -41,7 +41,7 @@ addEventListener('slime2:emote-catalog-update', event => {
 })
 ```
 
-`provider` is currently `seventv`. `account_id` is the Slime2 read-account ID,
+`provider` is currently `seventv`. `account_id` is the Slippy2 Desktop read-account ID,
 not a 7TV user ID. `revision` orders catalog snapshots within an app session;
 it is not a timestamp or persistent version. Reset revision tracking after the
 local `slime2:disconnected` event. Ignore outstanding responses for previous
@@ -68,7 +68,7 @@ the event too; Desktop does not import their code or know their rendering policy
 
 The separate Villager Chat widget consumes the same API in `desktop-bridge.js`;
 its `tools/build.mjs` generates the installed `script.js`. No villager-specific
-logic is included in Slime2.
+logic is included in Slippy2 Desktop.
 
 ## Manual smoke test
 
@@ -77,7 +77,7 @@ and reload its browser source. Keep existing widget IDs, settings and shared
 storage. Add an emote to the channel in 7TV and send its name as a new chat message
 in each layout. Rename it and remove it, verifying that only subsequent messages
 change. Switch active emote sets and repeat. Disconnect/reconnect the network and
-verify that catalogs recover without restarting Slime2. A temporary 7TV outage
+verify that catalogs recover without restarting Slippy2 Desktop. A temporary 7TV outage
 should leave existing emotes usable, while periodic reconciliation repairs missed
 changes. Automated tests use synthetic events and do not establish live service
 availability or OBS rendering behavior.

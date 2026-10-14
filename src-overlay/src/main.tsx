@@ -21,12 +21,12 @@ const bootRequest: typeof globalThis.slime2.request = async (
 	...args: any[]
 ) => {
 	if (bootRequests >= 64)
-		throw new Error('Too many pending Slime2 widget requests.');
+		throw new Error('Too many pending Slippy2 Desktop widget requests.');
 	bootRequests++;
 	try {
 		await new Promise<void>((resolve, reject) => {
 			const timer = setTimeout(
-				() => finish(new Error('Slime2 is not connected.')),
+				() => finish(new Error('Slippy2 Desktop is not connected.')),
 				15000,
 			);
 			function finish(error?: Error) {

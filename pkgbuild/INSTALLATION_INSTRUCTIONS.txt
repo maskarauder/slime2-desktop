@@ -4,4 +4,4 @@ Note: This is only for Arch Linux systems!
 2. Navigate to the new folder in a terminal.
 3. Run this command:
     makepkg -sci
-4. Slime2 should now be installed, along with all necessary dependencies!
+4. Slippy2 Desktop should now be installed, along with all necessary dependencies!

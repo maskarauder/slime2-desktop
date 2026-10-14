@@ -202,6 +202,24 @@ mod tests {
 	}
 
 	#[test]
+	fn renamed_assets_keep_the_existing_release_trust_boundary() {
+		let mut release = fixture();
+		let name = "Slippy2-Desktop-v1.6.0_Windows-X64.msi";
+		release["assets"][0]["name"] = json!(name);
+		release["assets"][0]["browser_download_url"] = json!(format!(
+			"https://github.com/{REPOSITORY}/releases/download/v1.6.0/{name}"
+		));
+		for field in ["url", "browser_download_url"] {
+			let url = Url::parse(release["assets"][0][field].as_str().unwrap())
+				.unwrap();
+			assert_eq!(
+				validate_asset(&release, "v1.6.0", &url, ".msi").unwrap(),
+				42
+			);
+		}
+	}
+
+	#[test]
 	fn unrelated_assets_unsigned_families_and_oversized_downloads_are_rejected()
 	{
 		let release = fixture();

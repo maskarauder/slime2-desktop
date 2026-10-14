@@ -23,7 +23,7 @@ export default function CreateWidgetPage() {
 		<div className='flex w-200 flex-col gap-4'>
 			<div className='flex items-center justify-between'>
 				<h2 className='font-mochiy text-6 text-zinc-800 text-shadow-[0_1px_white]'>
-					Slime2 Widgets
+					Built-in Widgets
 				</h2>
 
 				<DialogConfirmButton

@@ -2,7 +2,7 @@
 
 In **Settings > Updates**, enable **Automatically install the latest update at
 startup** to install a newer signed release on the next launch. The setting is
-off by default. Slime2 uses the selected stable/test release channel, chooses the
+off by default. Slippy2 Desktop uses the selected stable/test release channel, chooses the
 installer for the current app platform and architecture, verifies its signature,
 installs it and relaunches. Windows may show a UAC administrator prompt.
 
@@ -76,7 +76,7 @@ are separate from Windows/macOS operating-system code-signing certificates.
 
 4. Install this updater-enabled build manually once. Older builds without this
    functionality cannot update themselves retroactively. Later signed releases
-   with a higher numeric version can install through Slime2.
+   with a higher numeric version can install through Slippy2 Desktop.
 
 Use a **new numeric version for every update that should replace an installed
 build**, including promotion between channels. Tags such as `v1.5.3-test` still
@@ -122,7 +122,7 @@ uploaded manually without updater metadata/signatures is still a manual download
 The release workflow creates the necessary artifacts; do not hand-edit the
 manifest to point at an unsigned file.
 
-For updater errors, capture the displayed error and nearby Slime2 log lines. Do
+For updater errors, capture the displayed error and nearby Slippy2 Desktop log lines. Do
 not include private signing keys, passwords or authentication tokens. Windows MSI
 installation/relaunch, macOS app replacement and AppImage replacement still need
 platform smoke tests before relying on unattended updates during a stream.

@@ -83,7 +83,7 @@ export default function WidgetMetaEditor({
 						<TextField
 							compact
 							label='Website'
-							placeholder='https://slime2.stream/'
+							placeholder='https://example.com/'
 							value={meta.website || ''}
 							onChange={newValue => {
 								onChange({
@@ -96,7 +96,7 @@ export default function WidgetMetaEditor({
 						<TextField
 							compact
 							label='Support'
-							placeholder='https://forums.slime2.stream/'
+							placeholder='https://example.com/support'
 							value={meta.support || ''}
 							onChange={newValue => {
 								onChange({

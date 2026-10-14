@@ -254,7 +254,7 @@ export async function applyWidgetUpdate(
 	if (failure) {
 		if (applied)
 			throw new WidgetUpdateCompletionError(
-				'The widget update was installed, but Slime2 could not finish refreshing or saving its configuration. Restart Slime2 before changing more settings.',
+				'The widget update was installed, but Slippy2 Desktop could not finish refreshing or saving its configuration. Restart Slippy2 Desktop before changing more settings.',
 			);
 		throw failure;
 	}
@@ -297,7 +297,7 @@ export async function restoreWidgetUpdate(widgetId: string): Promise<void> {
 	if (failure) {
 		if (applied)
 			throw new WidgetUpdateCompletionError(
-				'The previous version was restored, but Slime2 could not finish refreshing or saving its configuration. Restart Slime2 before changing more settings.',
+				'The previous version was restored, but Slippy2 Desktop could not finish refreshing or saving its configuration. Restart Slippy2 Desktop before changing more settings.',
 			);
 		throw failure;
 	}

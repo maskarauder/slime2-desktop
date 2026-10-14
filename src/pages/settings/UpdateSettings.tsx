@@ -1,3 +1,4 @@
+import { APP_NAME } from '@/helpers/branding';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useSettings } from '@/contexts/settings/useSettings';
 import useAppVersionQuery from '@/hooks/useAppVersionQuery';
@@ -75,6 +76,7 @@ export default function UpdateSettings() {
 	}
 	return (
 		<ToolSection title='Updates'>
+			<p className='text-3.5'>Releases maintained by Maskarauder.</p>
 			<label>
 				Release channel
 				<select
@@ -109,7 +111,7 @@ export default function UpdateSettings() {
 						})
 					}
 				/>
-				Check once when Slime2 starts
+				Check once when {APP_NAME} starts
 			</label>
 			<label className='flex items-center gap-2'>
 				<input
@@ -133,7 +135,7 @@ export default function UpdateSettings() {
 			</label>
 			<p className='text-3.5'>
 				Takes effect next launch. Updates use the selected release
-				channel and restart Slime2, briefly interrupting chat and
+				channel and restart {APP_NAME}, briefly interrupting chat and
 				widgets. Windows may request administrator approval.
 			</p>
 			{!support?.supported && (

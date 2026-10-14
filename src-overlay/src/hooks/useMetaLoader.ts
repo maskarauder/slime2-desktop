@@ -34,7 +34,7 @@ export default function useMetaLoader() {
 
 // set tab title
 function setTitle(meta: Meta) {
-	let title = meta.name || 'Slime2 Overlay';
+	let title = meta.name || 'Slippy2 Desktop Overlay';
 	if (meta.version) title = `${title} v${meta.version}`;
 	if (meta.creator) title = `${title} by ${meta.creator}`;
 

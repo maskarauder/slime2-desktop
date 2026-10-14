@@ -125,7 +125,7 @@ Optional startup checks are off by default and run once per launch using the
 saved release channel.
 New releases appear in a dismissible banner. **Install and restart** downloads
 and verifies the matching signed installer, saves pending settings and relaunches
-Slime2. The optional **Automatically install the latest update at startup**
+Slippy2 Desktop. The optional **Automatically install the latest update at startup**
 checkbox is off by default and takes effect on the next launch. Manual update
 checks do not automatically install. Releases without updater metadata and
 unsupported installation formats still link to the manual downloads. See

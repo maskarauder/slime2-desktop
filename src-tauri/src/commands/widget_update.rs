@@ -56,7 +56,7 @@ pub async fn prepare_widget_update(
 	let paths = paths(&app_handle);
 	tauri::async_runtime::spawn_blocking(move || {
 		let mut pending = previews().lock().map_err(|_| {
-			"Widget updater is unavailable. Restart Slime2.".to_string()
+			"Widget updater is unavailable. Restart Slippy2 Desktop.".to_string()
 		})?;
 		expire(&mut pending);
 		widget_update::recover(&paths).map_err(|error| error.to_string())?;
@@ -96,7 +96,7 @@ pub async fn commit_widget_update(
 	let paths = paths(&app_handle);
 	tauri::async_runtime::spawn_blocking(move || {
 		let mut pending = previews().lock().map_err(|_| {
-			"Widget updater is unavailable. Restart Slime2.".to_string()
+			"Widget updater is unavailable. Restart Slippy2 Desktop.".to_string()
 		})?;
 		expire(&mut pending);
 		let preview = pending.remove(&token).ok_or_else(|| {
@@ -120,7 +120,7 @@ pub async fn discard_widget_update(
 ) -> Result<(), String> {
 	tauri::async_runtime::spawn_blocking(move || {
 		let mut pending = previews().lock().map_err(|_| {
-			"Widget updater is unavailable. Restart Slime2.".to_string()
+			"Widget updater is unavailable. Restart Slippy2 Desktop.".to_string()
 		})?;
 		if let Some(preview) = pending.remove(&token) {
 			widget_update::discard(preview.prepared)
@@ -139,7 +139,7 @@ pub async fn get_widget_update_status(
 	let paths = paths(&app_handle);
 	tauri::async_runtime::spawn_blocking(move || {
 		let _guard = previews().lock().map_err(|_| {
-			"Widget updater is unavailable. Restart Slime2.".to_string()
+			"Widget updater is unavailable. Restart Slippy2 Desktop.".to_string()
 		})?;
 		widget_update::status(&paths, &widget_id).map_err(|e| e.to_string())
 	})
@@ -154,7 +154,7 @@ pub async fn restore_widget_update(
 	let paths = paths(&app_handle);
 	tauri::async_runtime::spawn_blocking(move || {
 		let _guard = previews().lock().map_err(|_| {
-			"Widget updater is unavailable. Restart Slime2.".to_string()
+			"Widget updater is unavailable. Restart Slippy2 Desktop.".to_string()
 		})?;
 		widget_update::recover(&paths).map_err(|error| error.to_string())?;
 		widget_update::restore(&paths, &widget_id, &nanoid!(32))

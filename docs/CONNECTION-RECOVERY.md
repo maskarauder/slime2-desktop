@@ -65,7 +65,7 @@ continuation, deduplication and cancellation behavior are preserved.
 
 `npm run setup` and `npm run verify` use synthetic data and local test servers;
 they need no TikTok account, broadcast or API key. Windows **Verify Desktop**
-CI also compiles/tests the Tauri app and uploads `Slime2-Windows-MSI`.
+CI also compiles/tests the Tauri app and uploads `Slippy2-Desktop-Windows-MSI`.
 The patch leaves the app version unchanged. Use
 `npm run version:set -- <version>` when preparing the next installer release.
 

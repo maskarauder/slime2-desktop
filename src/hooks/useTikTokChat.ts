@@ -233,7 +233,7 @@ export default function useTikTokChat() {
 								(event.payload.retryAfterMs ?? 300_000),
 						});
 						console.info(
-							'TikTok broadcaster is offline; Slime2 will retry automatically.',
+							'TikTok broadcaster is offline; Slippy2 Desktop will retry automatically.',
 						);
 					} else if (state === 'connecting') {
 						statuses.current

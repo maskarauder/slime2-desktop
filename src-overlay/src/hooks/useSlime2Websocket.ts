@@ -80,7 +80,7 @@ export default function useSlime2Websocket(ready = true) {
 			heartbeatTimeoutRef.current = setTimeout(() => {
 				if (heartbeatPendingRef.current && websocketRef.current === websocket) {
 					console.warn(
-						'Slime2 heartbeat timed out; reconnecting the widget websocket.',
+						'Slippy2 Desktop heartbeat timed out; reconnecting the widget websocket.',
 					);
 					websocket.close();
 				}
@@ -106,7 +106,7 @@ export default function useSlime2Websocket(ready = true) {
 		const token = new URLSearchParams(location.hash.slice(1)).get('token');
 		if (!token) {
 			console.error(
-				'This overlay URL needs an access token. Copy a new OBS URL from Slime2.',
+				'This overlay URL needs an access token. Copy a new OBS URL from Slippy2 Desktop.',
 			);
 			return;
 		}
@@ -125,7 +125,7 @@ export default function useSlime2Websocket(ready = true) {
 					websocket.readyState !== WebSocket.CONNECTING &&
 					websocket.readyState !== WebSocket.OPEN
 				) {
-					reject(new Error('Slime2 is disconnected.'));
+					reject(new Error('Slippy2 Desktop is disconnected.'));
 					return;
 				}
 				function cleanup() {
@@ -139,11 +139,11 @@ export default function useSlime2Websocket(ready = true) {
 				}
 				function onClose() {
 					cleanup();
-					reject(new Error('Slime2 disconnected before the request.'));
+					reject(new Error('Slippy2 Desktop disconnected before the request.'));
 				}
 				const timer = setTimeout(() => {
 					cleanup();
-					reject(new Error('Timed out connecting to Slime2.'));
+					reject(new Error('Timed out connecting to Slippy2 Desktop.'));
 				}, 10000);
 				addEventListener('slime2:connected', onOpen);
 				websocket.addEventListener('close', onClose);
@@ -173,7 +173,7 @@ export default function useSlime2Websocket(ready = true) {
 			const requestId = `${requestType}_${nanoid()}_${Date.now()}`;
 
 			if (waitingRef.current + requestMapRef.current.size >= 64)
-				throw new Error('Too many pending Slime2 widget requests.');
+				throw new Error('Too many pending Slippy2 Desktop widget requests.');
 			waitingRef.current++;
 			try {
 				await waitForWebsocketOpen();
@@ -181,7 +181,7 @@ export default function useSlime2Websocket(ready = true) {
 				waitingRef.current--;
 			}
 			if (requestMapRef.current.size >= 64) {
-				throw new Error('Too many pending Slime2 widget requests.');
+				throw new Error('Too many pending Slippy2 Desktop widget requests.');
 			}
 			return new Promise((resolve, reject) => {
 				function cleanup() {
@@ -190,7 +190,9 @@ export default function useSlime2Websocket(ready = true) {
 				}
 				const timer = setTimeout(() => {
 					cleanup();
-					reject(new Error(`Slime2 request timed out: ${requestType}`));
+					reject(
+						new Error(`Slippy2 Desktop request timed out: ${requestType}`),
+					);
 				}, 30000);
 				requestMapRef.current.set(requestId, [
 					value => {
@@ -217,7 +219,7 @@ export default function useSlime2Websocket(ready = true) {
 						websocket.bufferedAmount > 1024 * 1024
 					)
 						throw new Error(
-							'Slime2 widget request exceeds the connection budget.',
+							'Slippy2 Desktop widget request exceeds the connection budget.',
 						);
 					websocket.send(message);
 				} catch (error) {
@@ -256,7 +258,7 @@ export default function useSlime2Websocket(ready = true) {
 					connectAttemptRef.current = 0;
 					startHeartbeat(websocket);
 					dispatchEvent(new CustomEvent('slime2:connected'));
-					console.info('Connected to Slime2!');
+					console.info('Connected to Slippy2 Desktop!');
 				} else if (type === 'widget-response') {
 					// resolve the request promise from the widget
 					try {
@@ -337,7 +339,7 @@ export default function useSlime2Websocket(ready = true) {
 			stopHeartbeat();
 			dispatchEvent(new CustomEvent('slime2:disconnected'));
 			for (const [, reject] of requestMapRef.current.values()) {
-				reject(new Error('Slime2 disconnected during the request.'));
+				reject(new Error('Slippy2 Desktop disconnected during the request.'));
 			}
 			requestMapRef.current.clear();
 			if (event.code !== 3000 && mountedRef.current) reconnect();
@@ -360,7 +362,7 @@ export default function useSlime2Websocket(ready = true) {
 
 		connectAttemptRef.current += 1;
 		console.info(
-			'Disconnected from Slime2! Reconnect attempt:',
+			'Disconnected from Slippy2 Desktop! Reconnect attempt:',
 			connectAttemptRef.current,
 			'Reconnecting in',
 			reconnectDelay,
@@ -387,7 +389,7 @@ export default function useSlime2Websocket(ready = true) {
 
 			websocketRef.current?.close(3000, 'Component Unmounted');
 			globalThis.slime2.request = async () => {
-				throw new Error('Slime2 is disconnected.');
+				throw new Error('Slippy2 Desktop is disconnected.');
 			};
 		};
 	}, [connect, ready]);

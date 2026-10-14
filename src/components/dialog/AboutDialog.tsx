@@ -1,122 +1,124 @@
-import slime2TextImage from '@/assets/slime2text.png';
-import slime2TvImage from '@/assets/slime2tv.png';
+import {
+	APP_NAME,
+	FORK_NOTICE,
+	PROJECT_URL,
+	UPSTREAM_URL,
+} from '@/helpers/branding';
 import useAppVersionQuery from '@/hooks/useAppVersionQuery';
-import LinkifyText from '../LinkifyText';
+import ExternalLink from '../ExternalLink';
 import DialogCancelButton from './DialogButton/DialogCancelButton';
 import DialogContent from './DialogContent';
+
+const linkClass = 'font-medium text-sky-800 underline underline-offset-2';
 
 export default function AboutDialog() {
 	const appVersionQuery = useAppVersionQuery();
 
 	return (
-		<DialogContent className='flex flex-col justify-between gap-4 p-4'>
-			<div className='flex gap-8 pl-4'>
-				<div className='flex flex-col items-center gap-2'>
-					<img
-						alt=''
-						src={slime2TvImage}
-						className='h-50 smooth-image'
-					/>
-					<img
-						alt=''
-						src={slime2TextImage}
-						className='h-20 smooth-image'
-					/>
+		<DialogContent className='flex w-200 max-w-[calc(100vw-2rem)] flex-col gap-4 p-5'>
+			<div className='min-h-0 flex-1 overflow-y-auto pr-1'>
+				<header className='mb-4 flex items-center gap-4'>
+					<div>
+						<h1 className='font-fredoka text-7 font-medium text-zinc-800'>
+							{APP_NAME}
+						</h1>
+						<p className='text-3.5 text-zinc-600'>
+							Independent Slime2 fork · Maintained by Maskarauder
+							{appVersionQuery.data &&
+								` · v${appVersionQuery.data}`}
+						</p>
+					</div>
+				</header>
+
+				<div className='flex flex-col gap-3 text-3.5 text-zinc-800'>
+					<p className='rounded-2 border border-sky-200 bg-sky-50 p-3'>
+						{FORK_NOTICE}
+					</p>
+					<section className='rounded-2 border border-zinc-300 bg-white p-3'>
+						<h2 className='mb-2 font-bold'>{APP_NAME} support</h2>
+						<div className='flex flex-wrap gap-x-5 gap-y-2'>
+							{[
+								['Source code', PROJECT_URL],
+								['Releases', `${PROJECT_URL}/releases`],
+								['Report an issue', `${PROJECT_URL}/issues`],
+								[
+									'License and notices',
+									`${PROJECT_URL}/blob/main/NOTICE.md`,
+								],
+							].map(([label, href]) => (
+								<ExternalLink
+									key={label}
+									href={href!}
+									className={linkClass}
+								>
+									{label}
+								</ExternalLink>
+							))}
+						</div>
+					</section>
+
+					<section className='rounded-2 border border-zinc-300 bg-white p-3'>
+						<h2 className='mb-2 font-bold'>
+							Independent development
+						</h2>
+						<p>
+							This fork includes generative-AI-assisted
+							contributions. The upstream README states that
+							repository contents are not to be used in
+							machine-learning models and that forks and pull
+							requests with generative-AI contributions will not
+							be accepted. Maskarauder chose to detach this
+							repository in response to that published policy; the
+							author did not contact the maintainer directly to
+							request detachment.
+						</p>
+					</section>
+
+					<section className='rounded-2 border border-zinc-300 bg-white p-3'>
+						<h2 className='mb-2 font-bold'>
+							Original project and credits
+						</h2>
+						<p>
+							Derived from{' '}
+							<ExternalLink
+								href={UPSTREAM_URL}
+								className={linkClass}
+							>
+								Slime2 Desktop
+							</ExternalLink>{' '}
+							by{' '}
+							<ExternalLink
+								href='https://zaytri.com/'
+								className={linkClass}
+							>
+								Zaytri
+							</ExternalLink>{' '}
+							and contributors. Distributed under
+							AGPL-3.0-or-later; original license and copyright
+							notices are retained.
+						</p>
+						<p className='mt-2'>
+							Original Slime2 logo: Bri,{' '}
+							<ExternalLink
+								href='https://sidequestdesigns.com/'
+								className={linkClass}
+							>
+								Sidequest Designs
+							</ExternalLink>
+							. Original icons and artwork:{' '}
+							<ExternalLink
+								href='https://ko-fi.com/shenanjegans'
+								className={linkClass}
+							>
+								Anje
+							</ExternalLink>
+							.
+						</p>
+					</section>
 				</div>
-
-				<LinkifyText
-					className='flex flex-1 flex-col gap-2'
-					linkClassName='text-green-800 font-medium'
-				>
-					<h1 className='flex items-baseline gap-1 font-fredoka text-5.5 font-medium text-zinc-800 text-shadow-[0_1px_white]'>
-						Slime2
-						{appVersionQuery.data && (
-							<span className='text-4.5 font-normal text-zinc-500'>
-								v{appVersionQuery.data}
-							</span>
-						)}
-					</h1>
-
-					<section className='flex flex-col gap-1 rounded-2 border border-zinc-300 bg-white px-3 py-1'>
-						<h2 className='font-fredoka text-4.5 font-medium text-zinc-800 uppercase'>
-							Links
-						</h2>
-						<div className='flex flex-col'>
-							{[
-								['Website', 'https://slime2.stream/'],
-								['Forums', 'https://slime2.forumotion.com/'],
-								[
-									'Source',
-									'https://github.com/maskarauder/slime2-desktop',
-								],
-								[
-									'Releases',
-									'https://github.com/maskarauder/slime2-desktop/releases',
-								],
-								[
-									'Report an issue',
-									'https://github.com/maskarauder/slime2-desktop/issues',
-								],
-								[
-									'Upstream source',
-									'https://github.com/zaytri/slime2-desktop',
-								],
-							].map(([label, link]) => {
-								return (
-									<p key={label} className='text-3.5'>
-										{label}: {link}
-									</p>
-								);
-							})}
-						</div>
-					</section>
-
-					<section className='flex flex-col gap-1 rounded-2 border border-zinc-300 bg-white px-3 py-1'>
-						<h2 className='text-4.5 font-bold text-zinc-800 uppercase'>
-							Team
-						</h2>
-						<div className='flex flex-col'>
-							{[['Zaytri', 'https://zaytri.com/']].map(
-								([label, link]) => {
-									return (
-										<p key={label} className='text-3.5'>
-											{label}: {link}
-										</p>
-									);
-								},
-							)}
-						</div>
-					</section>
-
-					<section className='flex flex-col gap-1 rounded-2 border border-zinc-300 bg-white px-3 py-1'>
-						<h2 className='font-fredoka text-4.5 font-medium text-zinc-800 uppercase'>
-							Art Credits
-						</h2>
-						<div className='flex flex-col'>
-							{[
-								[
-									'Logo Designer',
-									'Bri',
-									'https://sidequestdesigns.com/',
-								],
-								[
-									'Icon Artist',
-									'Anje',
-									'https://ko-fi.com/shenanjegans',
-								],
-							].map(([role, name, link]) => {
-								return (
-									<p key={name} className='text-3.5'>
-										{name}: {link} - {role}
-									</p>
-								);
-							})}
-						</div>
-					</section>
-				</LinkifyText>
 			</div>
 
-			<div className='flex justify-end gap-4'>
+			<div className='flex shrink-0 justify-end'>
 				<DialogCancelButton actionText='Close' />
 			</div>
 		</DialogContent>

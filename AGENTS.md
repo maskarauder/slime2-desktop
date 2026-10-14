@@ -1,4 +1,4 @@
-# Working on Slime2 Desktop
+# Working on Slippy2 Desktop
 
 Read `docs/DEVELOPMENT.md` for architecture, validation and release steps.
 Keep changes scoped to the request and preserve work already in the checkout.
@@ -33,6 +33,10 @@ Use focused tests while iterating, then the shared verification command. Report
 the actual commands/results and any platform or live-service checks not run.
 
 ## Boundaries and invariants
+
+- Do not create or add generative-AI artwork, including custom SVG/vector logos.
+  Prefer text labels, existing licensed icons, or generic placeholders. Preserve
+  the source and credits for reused artwork.
 
 - Keep Villager Chat and its commands, artwork, account-mapping policy and data
   schema in its own widget project. Desktop exposes generic shared storage,

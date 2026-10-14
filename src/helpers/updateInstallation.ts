@@ -1,3 +1,4 @@
+import { APP_NAME } from './branding';
 import {
 	discardPreparedUpdate,
 	getUpdateSupport,
@@ -86,7 +87,7 @@ async function performInstallation(update: AvailableUpdate) {
 				phase: 'downloading',
 				tag: update.tag,
 				percent,
-				message: `Downloading Slime2 ${update.tag}${percent === undefined ? '…' : ` (${percent}%)…`}`,
+				message: `Downloading ${APP_NAME} ${update.tag}${percent === undefined ? '…' : ` (${percent}%)…`}`,
 			});
 		});
 		token = prepared.token;
@@ -100,16 +101,16 @@ async function performInstallation(update: AvailableUpdate) {
 		publish({
 			phase: 'installing',
 			tag: update.tag,
-			message: 'Installing the update. Slime2 will close and relaunch…',
+			message: `Installing the update. ${APP_NAME} will close and relaunch…`,
 		});
-		console.info(`Installing Slime2 update ${update.tag}.`);
+		console.info(`Installing ${APP_NAME} update ${update.tag}.`);
 		await installPreparedUpdate(token);
 		token = undefined;
 	} catch (error) {
 		const message = safeLogText(
 			error instanceof Error ? error.message : error,
 		);
-		console.warn('Slime2 update failed:', message);
+		console.warn(`${APP_NAME} update failed:`, message);
 		publish({
 			phase: 'error',
 			tag: update.tag,

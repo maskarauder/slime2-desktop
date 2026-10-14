@@ -1,3 +1,4 @@
+import { APP_NAME } from '@/helpers/branding';
 import MoveModeBanner from '@/components/MoveModeBanner';
 import UpdateNotice from '@/components/UpdateNotice';
 import GearSvg from '@/components/svg/GearSvg';
@@ -75,6 +76,12 @@ function MainTabs() {
 			>
 				<UpdateNotice />
 				<div className='relative flex pt-6'>
+					<p className='absolute top-0.5 left-7 text-3 text-zinc-300'>
+						<span className='font-bold text-cyan-200'>
+							{APP_NAME}
+						</span>
+						{' · Independent Slime2 fork by Maskarauder'}
+					</p>
 					<TabList
 						render={<nav />}
 						className='flex h-14 flex-1 items-end gap-3 px-7'
